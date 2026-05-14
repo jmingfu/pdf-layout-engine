@@ -17,7 +17,7 @@ import java.lang.annotation.*;
 @Target({ElementType.FIELD})
 @Documented
 public @interface Font {
-    FontTypeEnum fontType() default FontTypeEnum.MICROSOFT_YAHEI;
-    int fontSize();
-    String color() default "#000000";
+    FontTypeEnum fontType() default FontTypeEnum.MICROSOFT_YAHEI;//字体。默认微软雅黑
+    int fontSize();//字号
+    String color() default "#000000";//字体颜色的16进制字符串表示，用于转为Color对象。默认黑色
 }

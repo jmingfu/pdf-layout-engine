@@ -18,21 +18,20 @@ import pdf.enums.ItemTypeEnum;
  */
 @Api(tags = "测试用细胞")
 @Data
-@ApiModel(description = "证书数据模型")
+@ApiModel(description = "测试用细胞信息")
 public class TestCell {
     private String repoName;
 
-    @Position(positionY = 113,title = "细胞名称：",alignType = AlignEnum.HORIZONTAL)
-    @Font(fontSize = 24,fontType = FontTypeEnum.MICROSOFT_YAHEI)
+    @Position(positionY = 113, title = "细胞名称：", alignType = AlignEnum.HORIZONTAL)
+    @Font(fontSize = 24, fontType = FontTypeEnum.MICROSOFT_YAHEI)
     private String cellName;
 
-    @Position(positionY = 126,title = "存储日期：",alignType = AlignEnum.HORIZONTAL)
+    @Position(positionY = 126, title = "存储日期：", alignType = AlignEnum.HORIZONTAL)
     @Font(fontSize = 18)
     private String cellDate;
 
-    @Position(positionY = 137,title = "存储方式：",alignType = AlignEnum.HORIZONTAL)
-    @Font(fontSize = 12,fontType = FontTypeEnum.SONGTI,color = "#FF0000")
+    @Position(positionY = 137, title = "存储方式：", alignType = AlignEnum.HORIZONTAL)
+    @Font(fontSize = 12, fontType = FontTypeEnum.SONGTI, color = "#FF0000")
     private String cellWay;
-
 
 }

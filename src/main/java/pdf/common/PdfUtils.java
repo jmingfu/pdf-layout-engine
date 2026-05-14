@@ -58,11 +58,14 @@ public class PdfUtils {
             //创建页面
             document = new PDDocument();
             fontConfig = new FontConfig(document);
+            //计算页面高度
             pageHeight = getTotalLength(model, modelSize);
             pageWidth = modelSize.width();
+            //毫米转pt点
             float pageWidthPt = pageWidth * ptConvert;
             pageHeightPt = pageHeight * ptConvert;
             document = new PDDocument();
+            //创建页面并新增
             page = new PDPage(new PDRectangle(pageWidthPt, pageHeightPt));
             document.addPage(page);
         } else {
@@ -72,12 +75,14 @@ public class PdfUtils {
         PDPageContentStream contentStream = new PDPageContentStream(document, page);
         //先绘制文字
         Field[] listField = model.getClass().getDeclaredFields();
+        //初始化游标为可变元素最小值
         float moveY = minY;
         for (Field field : listField) {
             field.setAccessible(true);
             float xMM, yMM;
             if (field.isAnnotationPresent(PdfList.class)) {
                 float listMargin = 0;
+                //判断是否有注解来 确定列表之间、列表内元素之间是否需要上下边距
                 if (field.isAnnotationPresent(Position.class)) {
                     Position position = field.getAnnotation(Position.class);
                     listMargin = position.marginBottom();
@@ -97,24 +102,30 @@ public class PdfUtils {
                             String value = (String) declaredField.get(o);
                             String key = position.title() + value + "|" + font.fontType() + "|" + font.fontSize();
                             List<String> strings = strs.get(key);
+                            //获取字体
                             PDFont pdFont = fontConfig.getPDFont(font.fontType());
                             for (String string : strings) {
+                                //每个字符串都要根据对齐方式计算实际左边距
                                 xMM = getXMMbyPosition(position, font, pdFont, string);
                                 if (!position.alignType().equals(AlignEnum.VERTICAL)) {
+                                    //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
                                     yMM = moveY + getFontMM(font.fontSize());
+                                    //游标偏移，加上底边距和字体高度
                                     moveY += position.marginBottom() + getFontMM(font.fontSize());
                                 } else {
+                                    //垂直居中，重新计算y坐标，游标无需移动
                                     yMM = (pageHeight - getFontMM(font.fontSize())) / 2;
                                 }
                                 drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
                             }
                         }
                     }
+                    //不同列表之间的元素，需要复用注解上的底边距进行偏移
                     moveY += listMargin;
                 }
-
-                //处理掉模版固定位置内容
-            } else if (field.isAnnotationPresent(Position.class)) {
+            }
+            //处理掉模版固定位置内容
+            else if (field.isAnnotationPresent(Position.class)) {
                 Position position = field.getAnnotation(Position.class);
                 if (position.alignType().equals(AlignEnum.SELF)) {
                     continue;
@@ -153,8 +164,9 @@ public class PdfUtils {
             log.error("请使用正确的模版！");
             System.exit(1);
         }
+        //先默认不可变部分white占据模版所有高度，后续直接做减法
         float height = modelSize.height(), white = height;
-        //先求出空白部分高度
+        //先求出固定部分高度
         Field[] listField = model.getClass().getDeclaredFields();
         for (Field field : listField) {
             if (field.isAnnotationPresent(PdfList.class)) {
@@ -162,13 +174,13 @@ public class PdfUtils {
                 if (genericType instanceof ParameterizedType) {
                     field.setAccessible(true);
                     List<?> list = (List<?>) field.get(model);
+                    //直接使用该列表获取实际占据的高度
                     sum += getListLength(list, field);
                     ParameterizedType pt = (ParameterizedType) genericType;
                     Type[] actualTypes = pt.getActualTypeArguments();
                     // 取第一个泛型参数，即 List<T> 中的 T
                     Class<?> elementClass = (Class<?>) actualTypes[0];
-                    // 现在 elementClass 就是 List 里元素的类型，例如 CellInfo.class
-                    // 你可以把它作为参数传递给解析方法
+                    //这里计算模版中的可变部分高度
                     white -= getItemLength(elementClass);
                 }
             }
@@ -180,11 +192,11 @@ public class PdfUtils {
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
     public static float getListLength(List<?> list, Field parentField) throws IllegalAccessException, IOException {
         float len = 0, listMarginButton = 0;
+        //如果加了注解就要计算该列表与其他列表的底边距
         if (parentField.isAnnotationPresent(Position.class)) {
             Position position = parentField.getAnnotation(Position.class);
             listMarginButton = position.marginBottom();
         }
-        StringBuilder builder = new StringBuilder();
         for (Object o : list) {
             Field[] fields = o.getClass().getDeclaredFields();
             for (Field field : fields) {
@@ -193,15 +205,17 @@ public class PdfUtils {
                         && StringUtils.isNotBlank((String) field.get(o))) {
                     Position position = field.getAnnotation(Position.class);
                     Font font = field.getAnnotation(Font.class);
-                    String str = (String) field.get(o);
-                    builder.setLength(0);
-                    builder.append(position.title()).append(str);
-                    String key = builder + "|" + font.fontType() + "|" + font.fontSize();
+                    String str = position.title() + field.get(o);
+                    //将字符串、字体、字号拼接作为key。便于缓存换行结果
+                    String key = str + "|" + font.fontType() + "|" + font.fontSize();
                     int fontSize = font.fontSize();
-                    splitString(builder, key, font, 180);
-                    len += strs.get(key).size() * getFontMM(fontSize) + position.marginBottom();
+                    //换行，换行的宽度阈值设置为180mm
+                    splitString(str, key, font, 180);
+                    //累加时需要用换行后字符串数量 * （字符高度+底边距）
+                    len += strs.get(key).size() * (getFontMM(fontSize) + position.marginBottom());
                 }
             }
+            //如果所有元素都为空，就不加底边距
             if (len != 0) {
                 len += listMarginButton;
             }
@@ -210,10 +224,12 @@ public class PdfUtils {
     }
 
     /**
-     * 获取可变行元素的默认初始高度，也就是模版类中的列表所在类中，所有需要填充的文本行总高度
+     * 获取可变行元素的默认初始高度，也就是模版中的列表所在类中，所有需要填充的文本初始的行总高度
      */
     public static float getItemLength(Class<?> cls) {
-        float yMin = Float.MAX_VALUE, yMax = 0, itemMargin = 0;
+        //yMin指左上边界，yMax指左下边界（包含底边距）
+        float yMin = Float.MAX_VALUE, yMax = 0, itemMargin;
+        //反射逻辑
         Field[] declaredFields = cls.getDeclaredFields();
         for (Field field : declaredFields) {
             if (field.isAnnotationPresent(Position.class) && field.isAnnotationPresent(Font.class)) {
@@ -225,17 +241,19 @@ public class PdfUtils {
                 itemMargin = position.marginBottom();
                 minY = Math.min(minY, position.positionY());
                 yMin = Math.min(yMin, position.positionY());
+                //最低点也是y最大时，需要算上文字高度和底边距
                 yMax = Math.max(yMax, position.positionY() + fontHeight + itemMargin);
             }
         }
+        //0表示如果某个列表漏加注解就不计算，跳过。
         return yMin == Float.MAX_VALUE ? 0 : yMax - yMin;
     }
 
     //文本换行并保存
-    public static void splitString(StringBuilder text, String key, Font font, float maxWidthMM) throws IOException {
+    public static List<String> splitString(String text, String key, Font font, float maxWidthMM) throws IOException {
         // 2. 命中缓存则直接返回
         if (strs.containsKey(key)) {
-            return;
+            return strs.get(key);
         }
         PDFont pdFont = fontConfig.getPDFont(font.fontType());
         List<String> lines = new ArrayList<>();
@@ -264,6 +282,7 @@ public class PdfUtils {
         }
         // 3. 存入缓存，Key = text + "|" + fontName + "|" + fontSize
         strs.put(key, lines);
+        return lines;
     }
 
     public static float getFontMM(int fontSize) {
@@ -320,15 +339,8 @@ public class PdfUtils {
         imageStream.close();
         // 2. 从 InputStream 创建 PDImageXObject
         PDImageXObject pdImage = PDImageXObject.createFromByteArray(document, imageBytes, imagePath);
-//        // 2. 从注解中取出宽度和高度（单位：毫米）
-//        float widthMm = imageStyle.width();
-//        float heightMm = imageStyle.height();
-//
-//        // 3. 毫米转点 (1 mm = 2.83464567 pt)
-//        float widthPt = widthMm * ptConvert;
-//        float heightPt = heightMm * ptConvert;
 
-        // 4. 绘制图片（坐标原点在左下角）
+        // 3. 绘制图片（坐标原点在左下角）
         contentStream.drawImage(pdImage, xPt, pageHeightPt - yPt - heightPt, widthPt, heightPt);
 
     }

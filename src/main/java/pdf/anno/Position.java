@@ -23,5 +23,5 @@ public @interface Position {
     float positionY() default -1;//上边距
     String title() default "";//文字的固定字段，例如“姓名：张三”里的“姓名：”
     AlignEnum alignType() default AlignEnum.DEFAULT;//居中类型，HORIZONTAL-横向居中。VERTICAL-纵向。DEFAULT-原始坐标。SELF-自定义，引擎不绘制该元素。
-    float marginBottom() default 4.5f;//内边距
+    float marginBottom() default 4.5f;//底边距
 }

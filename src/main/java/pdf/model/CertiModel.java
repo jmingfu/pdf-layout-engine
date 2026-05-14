@@ -23,17 +23,17 @@ import java.util.List;
 @ApiModel(description = "证书数据模型")
 public class CertiModel {
     @Position(positionX = 2, positionY = 0)
-    @ImageStyle(width = 206,height = 20)
+    @ImageStyle(width = 206, height = 20)
     @ApiModelProperty("证书顶部图片url")
     private String topImg;
 
     @Position(positionX = 0, positionY = 0)
-    @ImageStyle(width = 210,height = 2)
+    @ImageStyle(width = 210, height = 2)
     @ApiModelProperty("证书顶部边框图片url")
     private String topLineImg;
 
     @Position(positionX = 0, positionY = 240, alignType = AlignEnum.SELF)
-    @ImageStyle(width = 210,height = 2.2f)
+    @ImageStyle(width = 210, height = 2.2f)
     @ApiModelProperty("证书底框图片url")
     private String buttonLineImg;
 
