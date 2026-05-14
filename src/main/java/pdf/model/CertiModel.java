@@ -58,6 +58,7 @@ public class CertiModel {
     private String certiTitle;
 
     @ApiModelProperty("细胞列表")
+    @Position(positionY = 113)
     @PdfList
     List<TestCell> cellList;
 

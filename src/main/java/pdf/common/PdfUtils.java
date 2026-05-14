@@ -39,7 +39,7 @@ import java.util.Map;
 @Slf4j
 public class PdfUtils {
     private static Map<String, List<String>> strs = new HashMap<>();
-    private static final float itemMargin = 4.5f;
+    // private static final float itemMargin = 4.5f;
     private static float minY = Float.MAX_VALUE;
     public static FontConfig fontConfig;
     private static float pageWidth;
@@ -72,12 +72,17 @@ public class PdfUtils {
         PDPageContentStream contentStream = new PDPageContentStream(document, page);
         //先绘制文字
         Field[] listField = model.getClass().getDeclaredFields();
+        float moveY = minY;
         for (Field field : listField) {
             field.setAccessible(true);
             float xMM, yMM;
             if (field.isAnnotationPresent(PdfList.class)) {
+                float listMargin = 0;
+                if (field.isAnnotationPresent(Position.class)) {
+                    Position position = field.getAnnotation(Position.class);
+                    listMargin = position.marginBottom();
+                }
                 List<?> list = (List<?>) field.get(model);
-                float moveY = minY;
                 for (Object o : list) {
                     Field[] declaredFields = o.getClass().getDeclaredFields();
                     for (Field declaredField : declaredFields) {
@@ -97,7 +102,7 @@ public class PdfUtils {
                                 xMM = getXMMbyPosition(position, font, pdFont, string);
                                 if (!position.alignType().equals(AlignEnum.VERTICAL)) {
                                     yMM = moveY + getFontMM(font.fontSize());
-                                    moveY += itemMargin + getFontMM(font.fontSize());
+                                    moveY += position.marginBottom() + getFontMM(font.fontSize());
                                 } else {
                                     yMM = (pageHeight - getFontMM(font.fontSize())) / 2;
                                 }
@@ -105,7 +110,9 @@ public class PdfUtils {
                             }
                         }
                     }
+                    moveY += listMargin;
                 }
+
                 //处理掉模版固定位置内容
             } else if (field.isAnnotationPresent(Position.class)) {
                 Position position = field.getAnnotation(Position.class);
@@ -151,11 +158,11 @@ public class PdfUtils {
         Field[] listField = model.getClass().getDeclaredFields();
         for (Field field : listField) {
             if (field.isAnnotationPresent(PdfList.class)) {
-                field.setAccessible(true);
-                List<?> list = (List<?>) field.get(model);
-                sum += getListLength(list);
                 Type genericType = field.getGenericType();
                 if (genericType instanceof ParameterizedType) {
+                    field.setAccessible(true);
+                    List<?> list = (List<?>) field.get(model);
+                    sum += getListLength(list, field);
                     ParameterizedType pt = (ParameterizedType) genericType;
                     Type[] actualTypes = pt.getActualTypeArguments();
                     // 取第一个泛型参数，即 List<T> 中的 T
@@ -171,8 +178,12 @@ public class PdfUtils {
     }
 
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
-    public static float getListLength(List<?> list) throws IllegalAccessException, IOException {
-        float len = 0;
+    public static float getListLength(List<?> list, Field parentField) throws IllegalAccessException, IOException {
+        float len = 0, listMarginButton = 0;
+        if (parentField.isAnnotationPresent(Position.class)) {
+            Position position = parentField.getAnnotation(Position.class);
+            listMarginButton = position.marginBottom();
+        }
         StringBuilder builder = new StringBuilder();
         for (Object o : list) {
             Field[] fields = o.getClass().getDeclaredFields();
@@ -188,8 +199,11 @@ public class PdfUtils {
                     String key = builder + "|" + font.fontType() + "|" + font.fontSize();
                     int fontSize = font.fontSize();
                     splitString(builder, key, font, 180);
-                    len += strs.get(key).size() * getFontMM(fontSize) + itemMargin;
+                    len += strs.get(key).size() * getFontMM(fontSize) + position.marginBottom();
                 }
+            }
+            if (len != 0) {
+                len += listMarginButton;
             }
         }
         return len;
@@ -199,7 +213,7 @@ public class PdfUtils {
      * 获取可变行元素的默认初始高度，也就是模版类中的列表所在类中，所有需要填充的文本行总高度
      */
     public static float getItemLength(Class<?> cls) {
-        float yMin = Float.MAX_VALUE, yMax = 0;
+        float yMin = Float.MAX_VALUE, yMax = 0, itemMargin = 0;
         Field[] declaredFields = cls.getDeclaredFields();
         for (Field field : declaredFields) {
             if (field.isAnnotationPresent(Position.class) && field.isAnnotationPresent(Font.class)) {
@@ -207,13 +221,14 @@ public class PdfUtils {
                 Position position = field.getAnnotation(Position.class);
                 Font font = field.getAnnotation(Font.class);
                 int fontSize = font.fontSize();
-                float move = getFontMM(fontSize);
+                float fontHeight = getFontMM(fontSize);
+                itemMargin = position.marginBottom();
                 minY = Math.min(minY, position.positionY());
                 yMin = Math.min(yMin, position.positionY());
-                yMax = Math.max(yMax, position.positionY() + move);
+                yMax = Math.max(yMax, position.positionY() + fontHeight + itemMargin);
             }
         }
-        return yMax - yMin + itemMargin;
+        return yMin == Float.MAX_VALUE ? 0 : yMax - yMin;
     }
 
     //文本换行并保存
