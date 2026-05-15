@@ -7,7 +7,6 @@ import pdf.anno.Font;
 import pdf.anno.Position;
 import pdf.enums.AlignEnum;
 import pdf.enums.FontTypeEnum;
-import pdf.enums.ItemTypeEnum;
 
 /**
  * 基于SpringBoot框架的个人练手项目-测试用细胞类
@@ -30,7 +29,7 @@ public class TestCell {
     @Font(fontSize = 18)
     private String cellDate;
 
-    @Position(positionY = 137, title = "存储方式：", alignType = AlignEnum.HORIZONTAL)
+    @Position(positionY = 136.82f, title = "存储方式：", alignType = AlignEnum.HORIZONTAL)
     @Font(fontSize = 12, fontType = FontTypeEnum.SONGTI, color = "#FF0000")
     private String cellWay;
 

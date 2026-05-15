@@ -158,7 +158,7 @@ public class PdfUtils {
     }
 
     public static float getTotalLength(Object model, ModelSize modelSize) throws IllegalAccessException, IOException {
-        int sum = 0;
+        float sum = 0;
         //先处理外部模版
         if (modelSize == null || modelSize.height() == 0) {
             log.error("请使用正确的模版！");
@@ -181,7 +181,7 @@ public class PdfUtils {
                     // 取第一个泛型参数，即 List<T> 中的 T
                     Class<?> elementClass = (Class<?>) actualTypes[0];
                     //这里计算模版中的可变部分高度
-                    white -= getItemLength(elementClass);
+                    white -= getItemLength(elementClass, field);
                 }
             }
         }
@@ -226,7 +226,7 @@ public class PdfUtils {
     /**
      * 获取可变行元素的默认初始高度，也就是模版中的列表所在类中，所有需要填充的文本初始的行总高度
      */
-    public static float getItemLength(Class<?> cls) {
+    public static float getItemLength(Class<?> cls, Field parentField) {
         //yMin指左上边界，yMax指左下边界（包含底边距）
         float yMin = Float.MAX_VALUE, yMax = 0, itemMargin;
         //反射逻辑
@@ -244,6 +244,10 @@ public class PdfUtils {
                 //最低点也是y最大时，需要算上文字高度和底边距
                 yMax = Math.max(yMax, position.positionY() + fontHeight + itemMargin);
             }
+        }
+        if (parentField.isAnnotationPresent(Position.class) && yMin != Float.MAX_VALUE) {
+            Position position = parentField.getAnnotation(Position.class);
+            yMax += position.marginBottom();
         }
         //0表示如果某个列表漏加注解就不计算，跳过。
         return yMin == Float.MAX_VALUE ? 0 : yMax - yMin;
@@ -286,7 +290,7 @@ public class PdfUtils {
     }
 
     public static float getFontMM(int fontSize) {
-        return fontSize * 25.4f / 72;
+        return fontSize / ptConvert;
     }
 
     public static float getFountPt(float fontMM) {
