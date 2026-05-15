@@ -73,9 +73,9 @@ public class PdfServiceImpl implements PdfService {
         model.setRepoName("王五");
         // 添加多个细胞测试高度累加
         List<TestCell> cellList = new ArrayList<>();
-        cellList.add(cell1);
+//        cellList.add(cell1);
         cellList.add(cell2);
-//        cellList.add(cell3);
+        cellList.add(cell3);
         model.setCellList(cellList);
 
         // 3. 打印测试信息

@@ -59,7 +59,7 @@ public class PdfUtils {
             document = new PDDocument();
             fontConfig = new FontConfig(document);
             //计算页面高度
-            pageHeight = getTotalLength(model, modelSize);
+            pageHeight = getTotalLength(model);
             pageWidth = modelSize.width();
             //毫米转pt点
             float pageWidthPt = pageWidth * ptConvert;
@@ -157,36 +157,42 @@ public class PdfUtils {
         return outputPath;
     }
 
-    public static float getTotalLength(Object model, ModelSize modelSize) throws IllegalAccessException, IOException {
-        float sum = 0;
-        //先处理外部模版
-        if (modelSize == null || modelSize.height() == 0) {
-            log.error("请使用正确的模版！");
-            System.exit(1);
-        }
-        //先默认不可变部分white占据模版所有高度，后续直接做减法
-        float height = modelSize.height(), white = height;
-        //先求出固定部分高度
-        Field[] listField = model.getClass().getDeclaredFields();
-        for (Field field : listField) {
-            if (field.isAnnotationPresent(PdfList.class)) {
-                Type genericType = field.getGenericType();
-                if (genericType instanceof ParameterizedType) {
-                    field.setAccessible(true);
-                    List<?> list = (List<?>) field.get(model);
-                    //直接使用该列表获取实际占据的高度
-                    sum += getListLength(list, field);
-                    ParameterizedType pt = (ParameterizedType) genericType;
-                    Type[] actualTypes = pt.getActualTypeArguments();
-                    // 取第一个泛型参数，即 List<T> 中的 T
-                    Class<?> elementClass = (Class<?>) actualTypes[0];
-                    //这里计算模版中的可变部分高度
-                    white -= getItemLength(elementClass, field);
+    public static float getTotalLength(Object model) throws IllegalAccessException, IOException {
+        if(model.getClass().isAnnotationPresent(ModelSize.class)){
+            ModelSize modelSize = model.getClass().getAnnotation(ModelSize.class);
+            float sum = 0;
+            //先处理外部模版
+            if (modelSize == null || modelSize.height() == 0) {
+                log.error("请使用正确的模版！");
+                System.exit(1);
+            }
+            //先默认不可变部分white占据模版所有高度，后续直接做减法
+            float height = modelSize.height(), white = height;
+            //先求出固定部分高度
+            Field[] listField = model.getClass().getDeclaredFields();
+            for (Field field : listField) {
+                if (field.isAnnotationPresent(PdfList.class)) {
+                    Type genericType = field.getGenericType();
+                    if (genericType instanceof ParameterizedType) {
+                        field.setAccessible(true);
+                        List<?> list = (List<?>) field.get(model);
+                        //直接使用该列表获取实际占据的高度
+                        sum += getListLength(list, field);
+                        ParameterizedType pt = (ParameterizedType) genericType;
+                        Type[] actualTypes = pt.getActualTypeArguments();
+                        // 取第一个泛型参数，即 List<T> 中的 T
+                        Class<?> elementClass = (Class<?>) actualTypes[0];
+                        //这里计算模版中的可变部分高度
+                        white -= getItemLength(elementClass, field);
+                    }
                 }
             }
+            sum += white;
+            return sum;
         }
-        sum += white;
-        return sum;
+        else {
+            return 0;
+        }
     }
 
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
