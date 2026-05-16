@@ -16,6 +16,7 @@ import pdf.cell.TestCell;
 import pdf.common.PdfUtils;
 import pdf.config.style.FontConfig;
 import pdf.model.CertiModel;
+import pdf.model.Resume;
 import pdf.service.PdfService;
 
 import java.io.File;
@@ -40,6 +41,7 @@ public class PdfServiceImpl implements PdfService {
         return null;
     }
 
+    @Override
     public void generateMyCerti() throws IOException, IllegalAccessException, NoSuchFieldException {
         // 1. 准备测试数据
         TestCell cell1 = new TestCell();
@@ -201,5 +203,11 @@ public class PdfServiceImpl implements PdfService {
         path = (String) rightLineImg.get(model);
         PdfUtils.drawImage(document, contentStream, path, imageStyle.width() * PdfUtils.ptConvert,
                 page.getMediaBox().getHeight(), position.positionX() * PdfUtils.ptConvert, 0, page.getMediaBox().getHeight());
+    }
+
+    public void generateResume() throws IOException, IllegalAccessException {
+        Resume resume = new Resume();
+        resume.setHeadImage("images/简历头像.jpg");
+        PdfUtils.generatePdf(resume,"pdfs/Resume.pdf");
     }
 }

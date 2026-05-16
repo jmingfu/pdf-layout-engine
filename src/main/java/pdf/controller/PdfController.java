@@ -30,4 +30,10 @@ public class PdfController {
     public void generateCertificate() throws IOException, NoSuchFieldException, IllegalAccessException {
         pdfService.generateMyCerti();
     }
+
+    @ApiOperation(value = "生成简历", notes = "测试简历图片位置切换")
+    @PostMapping("/ByPath")
+    public void generateResume() throws IOException,IllegalAccessException {
+        pdfService.generateResume();
+    }
 }

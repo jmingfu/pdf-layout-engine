@@ -52,7 +52,9 @@ public class PdfUtils {
         ModelSize modelSize = modelClass.getAnnotation(ModelSize.class);
         PDDocument document = loadPdfTemplate(modelPath);
         PDPage page;
-        float pageHeightPt = 0;
+        float pageHeightPt, pageWidthPt;
+        //  创建内容流
+        PDPageContentStream contentStream;
         //字体初始化
         if (document == null) {
             //创建页面
@@ -62,17 +64,19 @@ public class PdfUtils {
             pageHeight = getTotalLength(model);
             pageWidth = modelSize.width();
             //毫米转pt点
-            float pageWidthPt = pageWidth * ptConvert;
+            pageWidthPt = pageWidth * ptConvert;
             pageHeightPt = pageHeight * ptConvert;
             document = new PDDocument();
             //创建页面并新增
             page = new PDPage(new PDRectangle(pageWidthPt, pageHeightPt));
             document.addPage(page);
+            contentStream = new PDPageContentStream(document, page);
         } else {
             page = document.getPage(0);
+            contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true,true);
+            pageHeightPt = page.getMediaBox().getHeight();
+            pageWidth = page.getMediaBox().getWidth() / ptConvert;
         }
-        //  创建内容流
-        PDPageContentStream contentStream = new PDPageContentStream(document, page);
         //先绘制文字
         Field[] listField = model.getClass().getDeclaredFields();
         //初始化游标为可变元素最小值
@@ -158,7 +162,7 @@ public class PdfUtils {
     }
 
     public static float getTotalLength(Object model) throws IllegalAccessException, IOException {
-        if(model.getClass().isAnnotationPresent(ModelSize.class)){
+        if (model.getClass().isAnnotationPresent(ModelSize.class)) {
             ModelSize modelSize = model.getClass().getAnnotation(ModelSize.class);
             float sum = 0;
             //先处理外部模版
@@ -189,8 +193,7 @@ public class PdfUtils {
             }
             sum += white;
             return sum;
-        }
-        else {
+        } else {
             return 0;
         }
     }
@@ -334,7 +337,7 @@ public class PdfUtils {
     //图片绘制
     public static void drawImage(PDDocument document, PDPageContentStream contentStream, String imagePath, float widthPt, float heightPt,
                                  float xPt, float yPt, float pageHeightPt) throws IOException {
-        // 1. 从路径加载图片（支持本地路径、URL、ClassPath）
+        // 1. 从路径加载图片，支持根路径和包路径
 //        PDImageXObject pdImage = PDImageXObject.createFromFile(imagePath, document);
         // 处理开头的斜杠（ClassLoader 不需要斜杠）
         String normalizedPath = imagePath;

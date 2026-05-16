@@ -20,4 +20,6 @@ public interface PdfService {
     byte[] generateCertificate(TestCell testCell);
 
     void generateMyCerti() throws IOException, IllegalAccessException, NoSuchFieldException;
+
+    void generateResume() throws IOException, IllegalAccessException;
 }
