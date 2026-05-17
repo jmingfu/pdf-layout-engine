@@ -36,6 +36,7 @@ import java.util.List;
 @Service
 @Slf4j
 public class PdfServiceImpl implements PdfService {
+    PdfUtils pdfUtils = new PdfUtils();
     @Override
     public byte[] generateCertificate(TestCell testCell) {
         return null;
@@ -97,7 +98,7 @@ public class PdfServiceImpl implements PdfService {
             System.out.println();
         }
         //6. 调用生成方法
-        String path = PdfUtils.generatePdf(model, "");
+        String path = pdfUtils.generatePdf(model, "");
         //7接下来就需要自定义的后置处理。例如引擎无法处理的右下角跟随文字移动的用户名、公司名；底框。还有需要拉伸的侧边框
         PDDocument document = null;
         InputStream is = null;
@@ -128,7 +129,7 @@ public class PdfServiceImpl implements PdfService {
     }
 
     public void postChange(PDDocument document, CertiModel model) throws IOException, NoSuchFieldException, IllegalAccessException {
-        float ptCv = PdfUtils.ptConvert;
+        float ptCv = pdfUtils.ptConvert;
         PDPage page = document.getPage(0);
         PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true);
         //分别绘制底部边框图片，左边框图片，有边框图片。
@@ -169,7 +170,7 @@ public class PdfServiceImpl implements PdfService {
             strWidthPt += fontConfig.getPDFont(font.fontType()).getStringWidth(String.valueOf(c)) / 1000f * font.fontSize();
         }
         ModelSize modelSize = model.getClass().getAnnotation(ModelSize.class);
-        PdfUtils.drawText(contentStream, fontConfig, text, font, (modelSize.width() - 15) * ptCv - strWidthPt,
+        pdfUtils.drawText(contentStream, fontConfig, text, font, (modelSize.width() - 15) * ptCv - strWidthPt,
                 heightPt - (modelSize.height() - position.positionY()) * ptCv);
         Field repoName = model.getClass().getDeclaredField("repoName");
         repoName.setAccessible(true);
@@ -182,7 +183,7 @@ public class PdfServiceImpl implements PdfService {
             char c = text.charAt(i);
             strWidthPt += fontConfig.getPDFont(font.fontType()).getStringWidth(String.valueOf(c)) / 1000f * font.fontSize();
         }
-        PdfUtils.drawText(contentStream, fontConfig, text, font, (modelSize.width() - 15) * ptCv - strWidthPt,
+        pdfUtils.drawText(contentStream, fontConfig, text, font, (modelSize.width() - 15) * ptCv - strWidthPt,
                 heightPt - (modelSize.height() - position.positionY()) * ptCv);
         contentStream.close();
 
@@ -201,13 +202,13 @@ public class PdfServiceImpl implements PdfService {
         imageStyle = rightLineImg.getAnnotation(ImageStyle.class);
         position = rightLineImg.getAnnotation(Position.class);
         path = (String) rightLineImg.get(model);
-        PdfUtils.drawImage(document, contentStream, path, imageStyle.width() * PdfUtils.ptConvert,
-                page.getMediaBox().getHeight(), position.positionX() * PdfUtils.ptConvert, 0, page.getMediaBox().getHeight());
+        pdfUtils.drawImage(document, contentStream, path, imageStyle.width() * pdfUtils.ptConvert,
+                page.getMediaBox().getHeight(), position.positionX() * pdfUtils.ptConvert, 0, page.getMediaBox().getHeight());
     }
 
     public void generateResume() throws IOException, IllegalAccessException {
         Resume resume = new Resume();
         resume.setHeadImage("images/简历头像.jpg");
-        PdfUtils.generatePdf(resume,"pdfs/Resume.pdf");
+        pdfUtils.generatePdf(resume,"pdfs/Resume.pdf");
     }
 }

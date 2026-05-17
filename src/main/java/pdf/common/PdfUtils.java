@@ -38,15 +38,15 @@ import java.util.Map;
 @Api(tags = "PDF工具类")
 @Slf4j
 public class PdfUtils {
-    private static Map<String, List<String>> strs = new HashMap<>();
-    // private static final float itemMargin = 4.5f;
-    private static float minY = Float.MAX_VALUE;
-    public static FontConfig fontConfig;
-    private static float pageWidth;
-    public static final float ptConvert = 2.83465f;
-    public static float pageHeight;
+    private Map<String, List<String>> strs = new HashMap<>();
+    // private final float itemMargin = 4.5f;
+    private float minY = Float.MAX_VALUE;
+    public FontConfig fontConfig;
+    private float pageWidth;
+    public final float ptConvert = 2.83465f;
+    public float pageHeight;
 
-    public static String generatePdf(Object model, String modelPath) throws IOException, IllegalAccessException {
+    public String generatePdf(Object model, String modelPath) throws IOException, IllegalAccessException {
 
         Class<?> modelClass = model.getClass();
         ModelSize modelSize = modelClass.getAnnotation(ModelSize.class);
@@ -72,8 +72,10 @@ public class PdfUtils {
             document.addPage(page);
             contentStream = new PDPageContentStream(document, page);
         } else {
+            //已存在页面需要初始化游标
+            initMoveY(model);
             page = document.getPage(0);
-            contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true,true);
+            contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true);
             pageHeightPt = page.getMediaBox().getHeight();
             pageWidth = page.getMediaBox().getWidth() / ptConvert;
         }
@@ -161,7 +163,7 @@ public class PdfUtils {
         return outputPath;
     }
 
-    public static float getTotalLength(Object model) throws IllegalAccessException, IOException {
+    public float getTotalLength(Object model) throws IllegalAccessException, IOException {
         if (model.getClass().isAnnotationPresent(ModelSize.class)) {
             ModelSize modelSize = model.getClass().getAnnotation(ModelSize.class);
             float sum = 0;
@@ -176,9 +178,10 @@ public class PdfUtils {
             Field[] listField = model.getClass().getDeclaredFields();
             for (Field field : listField) {
                 if (field.isAnnotationPresent(PdfList.class)) {
+                    field.setAccessible(true);
                     Type genericType = field.getGenericType();
-                    if (genericType instanceof ParameterizedType) {
-                        field.setAccessible(true);
+                    Object listObj = field.get(model);
+                    if (listObj instanceof List) {
                         List<?> list = (List<?>) field.get(model);
                         //直接使用该列表获取实际占据的高度
                         sum += getListLength(list, field);
@@ -199,7 +202,7 @@ public class PdfUtils {
     }
 
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
-    public static float getListLength(List<?> list, Field parentField) throws IllegalAccessException, IOException {
+    public float getListLength(List<?> list, Field parentField) throws IllegalAccessException, IOException {
         float len = 0, listMarginButton = 0;
         //如果加了注解就要计算该列表与其他列表的底边距
         if (parentField.isAnnotationPresent(Position.class)) {
@@ -235,7 +238,7 @@ public class PdfUtils {
     /**
      * 获取可变行元素的默认初始高度，也就是模版中的列表所在类中，所有需要填充的文本初始的行总高度
      */
-    public static float getItemLength(Class<?> cls, Field parentField) {
+    public float getItemLength(Class<?> cls, Field parentField) {
         //yMin指左上边界，yMax指左下边界（包含底边距）
         float yMin = Float.MAX_VALUE, yMax = 0, itemMargin;
         //反射逻辑
@@ -263,7 +266,7 @@ public class PdfUtils {
     }
 
     //文本换行并保存
-    public static List<String> splitString(String text, String key, Font font, float maxWidthMM) throws IOException {
+    public List<String> splitString(String text, String key, Font font, float maxWidthMM) throws IOException {
         // 2. 命中缓存则直接返回
         if (strs.containsKey(key)) {
             return strs.get(key);
@@ -298,16 +301,16 @@ public class PdfUtils {
         return lines;
     }
 
-    public static float getFontMM(int fontSize) {
+    public float getFontMM(int fontSize) {
         return fontSize / ptConvert;
     }
 
-    public static float getFountPt(float fontMM) {
+    public float getFountPt(float fontMM) {
         return fontMM * ptConvert;
     }
 
     //字符串颜色转Color对象
-    private static Color parseColor(String colorHex) {
+    private Color parseColor(String colorHex) {
         if (colorHex == null || colorHex.isEmpty() || !colorHex.startsWith("#")) {
             return Color.BLACK;
         }
@@ -322,7 +325,7 @@ public class PdfUtils {
     }
 
     //文本绘制
-    public static void drawText(PDPageContentStream contentStream, FontConfig fontConfig, String text, Font font, float xPt, float yPt) throws IOException {
+    public void drawText(PDPageContentStream contentStream, FontConfig fontConfig, String text, Font font, float xPt, float yPt) throws IOException {
         int fontSize = font.fontSize();
         PDFont pdFont = fontConfig.getPDFont(font.fontType());
         Color color = parseColor(font.color());
@@ -335,8 +338,8 @@ public class PdfUtils {
     }
 
     //图片绘制
-    public static void drawImage(PDDocument document, PDPageContentStream contentStream, String imagePath, float widthPt, float heightPt,
-                                 float xPt, float yPt, float pageHeightPt) throws IOException {
+    public void drawImage(PDDocument document, PDPageContentStream contentStream, String imagePath, float widthPt, float heightPt,
+                          float xPt, float yPt, float pageHeightPt) throws IOException {
         // 1. 从路径加载图片，支持根路径和包路径
 //        PDImageXObject pdImage = PDImageXObject.createFromFile(imagePath, document);
         // 处理开头的斜杠（ClassLoader 不需要斜杠）
@@ -358,7 +361,7 @@ public class PdfUtils {
 
     }
 
-    private static float getXMMbyPosition(Position position, Font font, PDFont pdFont, String text) throws IOException {
+    private float getXMMbyPosition(Position position, Font font, PDFont pdFont, String text) throws IOException {
         float xMM;
         if (!position.alignType().equals(AlignEnum.HORIZONTAL)) {
             xMM = position.positionX();
@@ -368,7 +371,7 @@ public class PdfUtils {
         return xMM;
     }
 
-    private static float getYMMbyPosition(Position position, Font font, float pageHeight) {
+    private float getYMMbyPosition(Position position, Font font, float pageHeight) {
         float yMM;
         if (!position.alignType().equals(AlignEnum.VERTICAL)) {
             yMM = position.positionY();
@@ -378,7 +381,7 @@ public class PdfUtils {
         return yMM;
     }
 
-    public static PDDocument loadPdfTemplate(String path) throws IOException {
+    public PDDocument loadPdfTemplate(String path) throws IOException {
         PDDocument document;
         InputStream is = null;
         // 1. 优先作为 classpath 资源加载（支持相对路径，resources 下的文件）
@@ -407,5 +410,26 @@ public class PdfUtils {
         return document;
     }
 
-
+    private void initMoveY(Object model) throws IllegalAccessException {
+        Field[] declaredFields = model.getClass().getDeclaredFields();
+        for (Field declaredField : declaredFields) {
+            if (declaredField.isAnnotationPresent(PdfList.class)) {
+                Type genericType = declaredField.getGenericType();
+                declaredField.setAccessible(true);
+                Object listObj = declaredField.get(model);
+                if (listObj instanceof List) {
+                    ParameterizedType pt = (ParameterizedType) genericType;
+                    Type[] actualTypeArguments = pt.getActualTypeArguments();
+                    Class<?> cls = (Class<?>) actualTypeArguments[0];
+                    for (Field field : cls.getDeclaredFields()) {
+                        if (field.isAnnotationPresent(Position.class)) {
+                            field.setAccessible(true);
+                            Position position = field.getAnnotation(Position.class);
+                            minY = Math.min(minY, position.positionY());
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
