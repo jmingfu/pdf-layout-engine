@@ -283,7 +283,7 @@ public class PdfUtils {
                 char c = text.charAt(end);
                 float charWidth = pdFont.getStringWidth(String.valueOf(c)) / 1000f * font.fontSize();
                 // 如果加上当前字符超出最大宽度，换行
-                if (currentWidth + charWidth > getFountPt(maxWidthMM)) {
+                if (currentWidth + charWidth > getFontPt(maxWidthMM)) {
                     break;
                 }
                 currentWidth += charWidth;
@@ -305,7 +305,7 @@ public class PdfUtils {
         return fontSize / ptConvert;
     }
 
-    public float getFountPt(float fontMM) {
+    public float getFontPt(float fontMM) {
         return fontMM * ptConvert;
     }
 
