@@ -27,13 +27,13 @@ public class PdfController {
 
     @ApiOperation(value = "生成证书", notes = "根据用户ID生成PDF证书并返回文件流")
     @PostMapping("/ByObj")
-    public void generateCertificate() throws IOException, NoSuchFieldException, IllegalAccessException {
-        pdfService.generateMyCerti();
+    public String generateCertificate() throws Exception {
+        return pdfService.generateMyCerti();
     }
 
     @ApiOperation(value = "生成简历", notes = "测试简历图片位置切换")
     @PostMapping("/ByPath")
-    public void generateResume() throws IOException,IllegalAccessException {
+    public void generateResume() throws Exception {
         pdfService.generateResume();
     }
 }

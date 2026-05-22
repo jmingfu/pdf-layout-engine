@@ -43,7 +43,7 @@ public class PdfServiceImpl implements PdfService {
     }
 
     @Override
-    public void generateMyCerti() throws IOException, IllegalAccessException, NoSuchFieldException {
+    public String generateMyCerti() throws Exception {
         // 1. 准备测试数据
         TestCell cell1 = new TestCell();
         cell1.setRepoName("王五");
@@ -98,34 +98,21 @@ public class PdfServiceImpl implements PdfService {
             System.out.println();
         }
         //6. 调用生成方法
-        String path = pdfUtils.generatePdf(model, "");
         //7接下来就需要自定义的后置处理。例如引擎无法处理的右下角跟随文字移动的用户名、公司名；底框。还有需要拉伸的侧边框
-        PDDocument document = null;
-        InputStream is = null;
-        // 1. 优先作为 classpath 资源加载（支持相对路径，resources 下的文件）
-        if (StringUtils.isNotBlank(path)) {
-            is = Thread.currentThread().getContextClassLoader().getResourceAsStream(path);
-            if (is == null && path.startsWith("/")) {
-                is = Thread.currentThread().getContextClassLoader().getResourceAsStream(path.substring(1));
-            }
-            if (is != null) {
-                document = PDDocument.load(is);
-            }
-        }
-        // 2. 降级：作为文件系统路径加载（支持绝对路径和相对路径）
-        if (is == null && StringUtils.isNotBlank(path)) {
-            File file = new File(path);
-            if (file.exists()) {
-                document = PDDocument.load(file);
-            }
-        }
+        PDDocument document = pdfUtils.generatePdfDocument(model);
         // 3. 如果都打不开
         if (document == null) {
             log.error("引擎处理pdf出错，文件不存在");
-            return;
+            return "";
         }
         //自定义后置处理
         postChange(document, model);
+        // 10. 输出到响应（测试时保存到本地文件）
+        String outputPath = "target/output.pdf";
+        document.save(outputPath);
+        document.close();
+        System.out.println("PDF 已生成：" + outputPath);
+        return outputPath;
     }
 
     public void postChange(PDDocument document, CertiModel model) throws IOException, NoSuchFieldException, IllegalAccessException {
@@ -206,9 +193,14 @@ public class PdfServiceImpl implements PdfService {
                 page.getMediaBox().getHeight(), position.positionX() * pdfUtils.ptConvert, 0, page.getMediaBox().getHeight());
     }
 
-    public void generateResume() throws IOException, IllegalAccessException {
+    public void generateResume() throws Exception {
         Resume resume = new Resume();
         resume.setHeadImage("images/简历头像.jpg");
-        pdfUtils.generatePdf(resume,"pdfs/Resume.pdf");
+        PDDocument document = pdfUtils.modifyPdfDocument(resume,"pdfs/Resume.pdf");
+        String outputPath = "target/output.pdf";
+        document.save(outputPath);
+        document.close();
+        System.out.println("PDF 已生成：" + outputPath);
+
     }
 }

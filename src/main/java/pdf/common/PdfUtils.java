@@ -41,12 +41,29 @@ public class PdfUtils {
     private Map<String, List<String>> strs = new HashMap<>();
     // private final float itemMargin = 4.5f;
     private float minY = Float.MAX_VALUE;
-    public FontConfig fontConfig;
+    private FontConfig fontConfig;
     private float pageWidth;
     public final float ptConvert = 2.83465f;
-    public float pageHeight;
+    private float pageHeight;
 
-    public String generatePdf(Object model, String modelPath) throws IOException, IllegalAccessException {
+    /**
+     *
+     * @param model: 需要填充的模版类
+     * @return 最终结果的PDDocument对象
+     * @throws Exception
+     */
+    public PDDocument generatePdfDocument(Object model)throws Exception{
+        return modifyPdfDocument(model,"");
+    }
+
+    /**
+     * 在已有的模板上填充内容，建议提前调用测量方法：getTotalLength测量页面高度再创建模板，避免高度不一致导致排版错乱。
+     * @param model: 需要填充的模版类
+     * @param modelPath：前置文件的路径，在已有pdf上填充
+     * @return 最终结果的PDDocument对象
+     * @throws Exception
+     */
+    public PDDocument modifyPdfDocument(Object model, String modelPath) throws Exception {
 
         Class<?> modelClass = model.getClass();
         ModelSize modelSize = modelClass.getAnnotation(ModelSize.class);
@@ -154,13 +171,7 @@ public class PdfUtils {
         }
         System.out.println("高度为：" + pageHeight + "宽度为" + pageWidth);
         contentStream.close();
-
-        // 10. 输出到响应（测试时保存到本地文件）
-        String outputPath = "target/output.pdf";
-        document.save(outputPath);
-        document.close();
-        System.out.println("PDF 已生成：" + outputPath);
-        return outputPath;
+        return document;
     }
 
     public float getTotalLength(Object model) throws IllegalAccessException, IOException {

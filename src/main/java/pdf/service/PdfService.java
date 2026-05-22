@@ -19,7 +19,7 @@ import java.io.IOException;
 public interface PdfService {
     byte[] generateCertificate(TestCell testCell);
 
-    void generateMyCerti() throws IOException, IllegalAccessException, NoSuchFieldException;
+    String generateMyCerti() throws Exception;
 
-    void generateResume() throws IOException, IllegalAccessException;
+    void generateResume() throws Exception;
 }
