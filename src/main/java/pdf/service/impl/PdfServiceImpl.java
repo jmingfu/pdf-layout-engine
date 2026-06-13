@@ -2,7 +2,6 @@ package pdf.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -19,7 +18,6 @@ import pdf.model.CertiModel;
 import pdf.model.Resume;
 import pdf.service.PdfService;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
@@ -37,6 +35,7 @@ import java.util.List;
 @Slf4j
 public class PdfServiceImpl implements PdfService {
     PdfUtils pdfUtils = new PdfUtils();
+
     @Override
     public byte[] generateCertificate(TestCell testCell) {
         return null;
@@ -106,16 +105,15 @@ public class PdfServiceImpl implements PdfService {
             return "";
         }
         //自定义后置处理
-        postChange(document, model);
+        return postChange(document, model);
         // 10. 输出到响应（测试时保存到本地文件）
-        String outputPath = "target/output.pdf";
-        document.save(outputPath);
-        document.close();
-        System.out.println("PDF 已生成：" + outputPath);
-        return outputPath;
+//        String outputPath = "target/output.pdf";
+//        document.save(outputPath);
+//        document.close();
+//        System.out.println("PDF 已生成：" + outputPath);
     }
 
-    public void postChange(PDDocument document, CertiModel model) throws IOException, NoSuchFieldException, IllegalAccessException {
+    public String postChange(PDDocument document, CertiModel model) throws IOException, NoSuchFieldException, IllegalAccessException {
         float ptCv = pdfUtils.ptConvert;
         PDPage page = document.getPage(0);
         PDPageContentStream contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true);
@@ -179,6 +177,7 @@ public class PdfServiceImpl implements PdfService {
         document.save(outputPath);
         document.close();
         System.out.println("PDF 已生成：" + outputPath);
+        return outputPath;
     }
 
     private void drawTwoSide(PDDocument document, CertiModel model, PDPage page, PDPageContentStream contentStream, Field rightLineImg) throws IllegalAccessException, IOException {
@@ -196,7 +195,7 @@ public class PdfServiceImpl implements PdfService {
     public void generateResume() throws Exception {
         Resume resume = new Resume();
         resume.setHeadImage("images/简历头像.jpg");
-        PDDocument document = pdfUtils.modifyPdfDocument(resume,"pdfs/Resume.pdf");
+        PDDocument document = pdfUtils.modifyPdfDocument(resume, "pdfs/Resume.pdf");
         String outputPath = "target/output.pdf";
         document.save(outputPath);
         document.close();

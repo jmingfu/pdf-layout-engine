@@ -17,7 +17,7 @@ import pdf.anno.Position;
 @Data
 @ModelSize(height = 297)
 public class Resume {
-    @Position(positionX = 175,positionY = 8.5f,marginBottom = 0)
+    @Position(positionX = 175,positionY = 8.5f,stringMargin = 0)
     @ImageStyle(width = 26,height = 31.2f)
     private String headImage;
 }

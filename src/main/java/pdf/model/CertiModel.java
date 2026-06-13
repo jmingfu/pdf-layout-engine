@@ -58,8 +58,7 @@ public class CertiModel {
     private String certiTitle;
 
     @ApiModelProperty("细胞列表")
-    @Position(positionY = 113)
-    @PdfList
+    @PdfList(listMargin = 45)
     List<TestCell> cellList;
 
     @Position(positionX = 164, positionY = 214, title = "储存人姓名：", alignType = AlignEnum.SELF)

@@ -47,18 +47,18 @@ public class PdfUtils {
     private float pageHeight;
 
     /**
-     *
      * @param model: 需要填充的模版类
      * @return 最终结果的PDDocument对象
      * @throws Exception
      */
-    public PDDocument generatePdfDocument(Object model)throws Exception{
-        return modifyPdfDocument(model,"");
+    public PDDocument generatePdfDocument(Object model) throws Exception {
+        return modifyPdfDocument(model, "");
     }
 
     /**
      * 在已有的模板上填充内容，建议提前调用测量方法：getTotalLength测量页面高度再创建模板，避免高度不一致导致排版错乱。
-     * @param model: 需要填充的模版类
+     *
+     * @param model:                      需要填充的模版类
      * @param modelPath：前置文件的路径，在已有pdf上填充
      * @return 最终结果的PDDocument对象
      * @throws Exception
@@ -104,12 +104,9 @@ public class PdfUtils {
             field.setAccessible(true);
             float xMM, yMM;
             if (field.isAnnotationPresent(PdfList.class)) {
-                float listMargin = 0;
-                //判断是否有注解来 确定列表之间、列表内元素之间是否需要上下边距
-                if (field.isAnnotationPresent(Position.class)) {
-                    Position position = field.getAnnotation(Position.class);
-                    listMargin = position.marginBottom();
-                }
+                //判断是否有注解,来确定列表之间、列表内元素之间是否需要上下边距
+                PdfList pdfList = field.getAnnotation(PdfList.class);
+                float listMargin = pdfList.listMargin();
                 List<?> list = (List<?>) field.get(model);
                 for (Object o : list) {
                     Field[] declaredFields = o.getClass().getDeclaredFields();
@@ -134,7 +131,7 @@ public class PdfUtils {
                                     //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
                                     yMM = moveY + getFontMM(font.fontSize());
                                     //游标偏移，加上底边距和字体高度
-                                    moveY += position.marginBottom() + getFontMM(font.fontSize());
+                                    moveY += position.stringMargin() + getFontMM(font.fontSize());
                                 } else {
                                     //垂直居中，重新计算y坐标，游标无需移动
                                     yMM = (pageHeight - getFontMM(font.fontSize())) / 2;
@@ -190,18 +187,20 @@ public class PdfUtils {
             for (Field field : listField) {
                 if (field.isAnnotationPresent(PdfList.class)) {
                     field.setAccessible(true);
+                    PdfList pdfList =  field.getAnnotation(PdfList.class);
+                    float listMargin = pdfList.listMargin();
                     Type genericType = field.getGenericType();
                     Object listObj = field.get(model);
                     if (listObj instanceof List) {
                         List<?> list = (List<?>) field.get(model);
                         //直接使用该列表获取实际占据的高度
-                        sum += getListLength(list, field);
+                        sum += getListLength(list, listMargin);
                         ParameterizedType pt = (ParameterizedType) genericType;
                         Type[] actualTypes = pt.getActualTypeArguments();
                         // 取第一个泛型参数，即 List<T> 中的 T
                         Class<?> elementClass = (Class<?>) actualTypes[0];
                         //这里计算模版中的可变部分高度
-                        white -= getItemLength(elementClass, field);
+                        white -= getItemLength(elementClass, listMargin);
                     }
                 }
             }
@@ -213,13 +212,8 @@ public class PdfUtils {
     }
 
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
-    public float getListLength(List<?> list, Field parentField) throws IllegalAccessException, IOException {
-        float len = 0, listMarginButton = 0;
-        //如果加了注解就要计算该列表与其他列表的底边距
-        if (parentField.isAnnotationPresent(Position.class)) {
-            Position position = parentField.getAnnotation(Position.class);
-            listMarginButton = position.marginBottom();
-        }
+    public float getListLength(List<?> list, float listMargin) throws IllegalAccessException, IOException {
+        float len = 0;
         for (Object o : list) {
             Field[] fields = o.getClass().getDeclaredFields();
             for (Field field : fields) {
@@ -235,12 +229,12 @@ public class PdfUtils {
                     //换行，换行的宽度阈值设置为180mm
                     splitString(str, key, font, 180);
                     //累加时需要用换行后字符串数量 * （字符高度+底边距）
-                    len += strs.get(key).size() * (getFontMM(fontSize) + position.marginBottom());
+                    len += strs.get(key).size() * (getFontMM(fontSize) + position.stringMargin());
                 }
             }
             //如果所有元素都为空，就不加底边距
             if (len != 0) {
-                len += listMarginButton;
+                len += listMargin;
             }
         }
         return len;
@@ -249,7 +243,7 @@ public class PdfUtils {
     /**
      * 获取可变行元素的默认初始高度，也就是模版中的列表所在类中，所有需要填充的文本初始的行总高度
      */
-    public float getItemLength(Class<?> cls, Field parentField) {
+    public float getItemLength(Class<?> cls, float listMargin) {
         //yMin指左上边界，yMax指左下边界（包含底边距）
         float yMin = Float.MAX_VALUE, yMax = 0, itemMargin;
         //反射逻辑
@@ -261,16 +255,15 @@ public class PdfUtils {
                 Font font = field.getAnnotation(Font.class);
                 int fontSize = font.fontSize();
                 float fontHeight = getFontMM(fontSize);
-                itemMargin = position.marginBottom();
+                itemMargin = position.stringMargin();
                 minY = Math.min(minY, position.positionY());
                 yMin = Math.min(yMin, position.positionY());
                 //最低点也是y最大时，需要算上文字高度和底边距
                 yMax = Math.max(yMax, position.positionY() + fontHeight + itemMargin);
             }
         }
-        if (parentField.isAnnotationPresent(Position.class) && yMin != Float.MAX_VALUE) {
-            Position position = parentField.getAnnotation(Position.class);
-            yMax += position.marginBottom();
+        if (yMin != Float.MAX_VALUE) {
+            yMax += listMargin;
         }
         //0表示如果某个列表漏加注解就不计算，跳过。
         return yMin == Float.MAX_VALUE ? 0 : yMax - yMin;

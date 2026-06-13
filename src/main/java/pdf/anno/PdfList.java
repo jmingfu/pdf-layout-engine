@@ -16,5 +16,5 @@ import java.lang.annotation.*;
 @Target({ElementType.FIELD})
 @Documented
 public @interface PdfList {
-
+    float listMargin() default 4.5f; //列表间距
 }
