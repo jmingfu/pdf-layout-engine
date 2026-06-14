@@ -12,7 +12,7 @@ import java.lang.annotation.*;
  * @date 2026-05-12 10:10
  * @date 2026-05-12
  */
-@Api(tags = "字体设置")
+@Api(tags = "文本样式设置")
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.FIELD})
 @Documented
@@ -20,4 +20,5 @@ public @interface Font {
     FontTypeEnum fontType() default FontTypeEnum.MICROSOFT_YAHEI;//字体。默认微软雅黑
     int fontSize();//字号
     String color() default "#000000";//字体颜色的16进制字符串表示，用于转为Color对象。默认黑色
+    float maxWidth() default 180;//单行文本的最大宽度，超过就自动换行。
 }

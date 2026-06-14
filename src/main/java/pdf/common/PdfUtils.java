@@ -78,8 +78,8 @@ public class PdfUtils {
             document = new PDDocument();
             fontConfig = new FontConfig(document);
             //计算页面高度
-            pageHeight = getTotalLength(model);
             pageWidth = modelSize.width();
+            pageHeight = getTotalLength(model);
             //毫米转pt点
             pageWidthPt = pageWidth * ptConvert;
             pageHeightPt = pageHeight * ptConvert;
@@ -110,6 +110,7 @@ public class PdfUtils {
                 List<?> list = (List<?>) field.get(model);
                 for (Object o : list) {
                     Field[] declaredFields = o.getClass().getDeclaredFields();
+                    Map<Float, Float> map = new HashMap<>();
                     for (Field declaredField : declaredFields) {
                         declaredField.setAccessible(true);
                         if (declaredField.isAnnotationPresent(Position.class) && declaredField.isAnnotationPresent(Font.class)
@@ -124,19 +125,30 @@ public class PdfUtils {
                             List<String> strings = strs.get(key);
                             //获取字体
                             PDFont pdFont = fontConfig.getPDFont(font.fontType());
+                            float strTotalHeight = strings.size() * ((getFontMM(font.fontSize()) + position.stringMargin()));
+                            yMM = moveY + getFontMM(font.fontSize());
+                            if (!map.containsKey(position.positionY())) {
+                                map.put(position.positionY(), strTotalHeight);
+                                moveY += strTotalHeight;
+                            } else {
+                                float maxTotalHeight = map.get(position.positionY());
+                                yMM = moveY - maxTotalHeight + getFontMM(font.fontSize());
+                                if (strTotalHeight > maxTotalHeight) {
+                                    map.put(position.positionY(), strTotalHeight);
+                                    moveY += strTotalHeight - maxTotalHeight;
+                                }
+                            }
                             for (String string : strings) {
                                 //每个字符串都要根据对齐方式计算实际左边距
                                 xMM = getXMMbyPosition(position, font, pdFont, string);
+                                drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
                                 if (!position.alignType().equals(AlignEnum.VERTICAL)) {
                                     //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
-                                    yMM = moveY + getFontMM(font.fontSize());
-                                    //游标偏移，加上底边距和字体高度
-                                    moveY += position.stringMargin() + getFontMM(font.fontSize());
+                                    yMM += getFontMM(font.fontSize()) + position.stringMargin();
                                 } else {
                                     //垂直居中，重新计算y坐标，游标无需移动
                                     yMM = (pageHeight - getFontMM(font.fontSize())) / 2;
                                 }
-                                drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
                             }
                         }
                     }
@@ -184,10 +196,12 @@ public class PdfUtils {
             float height = modelSize.height(), white = height;
             //先求出固定部分高度
             Field[] listField = model.getClass().getDeclaredFields();
+            //遍历模版的每一个字段
             for (Field field : listField) {
+                //找出其中需要绘制的可变列表
                 if (field.isAnnotationPresent(PdfList.class)) {
                     field.setAccessible(true);
-                    PdfList pdfList =  field.getAnnotation(PdfList.class);
+                    PdfList pdfList = field.getAnnotation(PdfList.class);
                     float listMargin = pdfList.listMargin();
                     Type genericType = field.getGenericType();
                     Object listObj = field.get(model);
@@ -214,8 +228,10 @@ public class PdfUtils {
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
     public float getListLength(List<?> list, float listMargin) throws IllegalAccessException, IOException {
         float len = 0;
+        //遍历列表中的所有元素，找最大最小值，相减。
         for (Object o : list) {
             Field[] fields = o.getClass().getDeclaredFields();
+            Map<Float, Float> map = new HashMap<>();
             for (Field field : fields) {
                 field.setAccessible(true);
                 if (field.isAnnotationPresent(Position.class) && field.isAnnotationPresent(Font.class)
@@ -227,10 +243,21 @@ public class PdfUtils {
                     String key = str + "|" + font.fontType() + "|" + font.fontSize();
                     int fontSize = font.fontSize();
                     //换行，换行的宽度阈值设置为180mm
-                    splitString(str, key, font, 180);
+                    splitString(str, key, font, font.maxWidth());
+                    //换行后字符串总高
+                    float stringHeight = strs.get(key).size() * (getFontMM(fontSize) + position.stringMargin());
                     //累加时需要用换行后字符串数量 * （字符高度+底边距）
-                    len += strs.get(key).size() * (getFontMM(fontSize) + position.stringMargin());
+                    if (map.containsKey(position.positionY())) {
+                        if (map.get(position.positionY()) < stringHeight) {
+                            map.put(position.positionY(), stringHeight);
+                        }
+                    } else {
+                        map.put(position.positionY(), stringHeight);
+                    }
                 }
+            }
+            for (float height : map.values()) {
+                len += height;
             }
             //如果所有元素都为空，就不加底边距
             if (len != 0) {

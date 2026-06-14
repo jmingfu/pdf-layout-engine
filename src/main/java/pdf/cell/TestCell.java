@@ -21,8 +21,12 @@ import pdf.enums.FontTypeEnum;
 public class TestCell {
     private String repoName;
 
-    @Position(positionY = 113, title = "细胞名称：", alignType = AlignEnum.HORIZONTAL)
-    @Font(fontSize = 24, fontType = FontTypeEnum.MICROSOFT_YAHEI)
+    @Position(positionX = 10,positionY = 113, alignType = AlignEnum.DEFAULT)
+    @Font(fontSize = 24, fontType = FontTypeEnum.HEITI,maxWidth = 50)
+    private String cellNameTitle;
+
+    @Position(positionX = 50,positionY = 113, alignType = AlignEnum.DEFAULT)
+    @Font(fontSize = 24, fontType = FontTypeEnum.SONGTI,maxWidth = 130)
     private String cellName;
 
     @Position(positionY = 126, title = "存储日期：", alignType = AlignEnum.HORIZONTAL)

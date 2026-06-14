@@ -52,6 +52,7 @@ public class PdfServiceImpl implements PdfService {
 
         TestCell cell2 = new TestCell();
         cell2.setRepoName("王五");
+        cell2.setCellNameTitle("细胞名称：");
         cell2.setCellName("免疫细胞-002");
         cell2.setCellDate("2026-05-11");
         cell2.setCellWay("超低温保存");
