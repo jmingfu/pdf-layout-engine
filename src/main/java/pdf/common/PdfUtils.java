@@ -414,28 +414,22 @@ public class PdfUtils {
 
     public PDDocument loadPdfTemplate(String path) throws IOException {
         PDDocument document;
-        InputStream is = null;
-        // 1. 优先作为 classpath 资源加载（支持相对路径，resources 下的文件）
-        if (StringUtils.isNotBlank(path)) {
-            is = Thread.currentThread().getContextClassLoader().getResourceAsStream(path);
-            if (is == null && path.startsWith("/")) {
-                is = Thread.currentThread().getContextClassLoader().getResourceAsStream(path.substring(1));
-            }
+        InputStream is;
+        if (StringUtils.isBlank(path)) {
+            return null;
         }
-        // 2. 降级：作为文件系统路径加载（支持绝对路径和相对路径）
-        if (is == null && StringUtils.isNotBlank(path)) {
+        // 1. 优先作为 classpath 资源加载（支持相对路径，resources 下的文件）
+        is = getClass().getClassLoader().getResourceAsStream(path);
+        // 2. 降级，作为文件系统路径加载
+        if (is == null) {
             File file = new File(path);
             if (file.exists()) {
                 return PDDocument.load(file);
             }
-        }
-
-        // 3. 如果都打不开
-        if (is == null) {
+            log.info("找不到文件：文件路径输入错误或不存在！");
             return null;
         }
-
-        // 4. 从 InputStream 加载
+        // 3. 从 InputStream 加载
         document = PDDocument.load(is);
         is.close();
         return document;
