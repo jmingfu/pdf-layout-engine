@@ -38,7 +38,7 @@ import java.util.Map;
 @Api(tags = "PDF工具类")
 @Slf4j
 public class PdfUtils {
-    private Map<String, List<String>> strs = new HashMap<>();
+    private final Map<String, List<String>> strs = new HashMap<>();
     // private final float itemMargin = 4.5f;
     private float minY = Float.MAX_VALUE;
     private FontConfig fontConfig;
@@ -58,32 +58,35 @@ public class PdfUtils {
     /**
      * 在已有的模板上填充内容，建议提前调用测量方法：getTotalLength测量页面高度再创建模板，避免高度不一致导致排版错乱。
      *
-     * @param model:                      需要填充的模版类
+     * @param model:需要填充的模版类
      * @param modelPath：前置文件的路径，在已有pdf上填充
      * @return 最终结果的PDDocument对象
      * @throws Exception
      */
     public PDDocument modifyPdfDocument(Object model, String modelPath) throws Exception {
-
-        Class<?> modelClass = model.getClass();
-        ModelSize modelSize = modelClass.getAnnotation(ModelSize.class);
+        //获取模版宽高，宽默认210mm（A4纸宽）
+        if (!model.getClass().isAnnotationPresent(ModelSize.class)) {
+            log.error("错误！关键注解未配置：ModelSize");
+            return null;
+        }
+        ModelSize modelSize = model.getClass().getAnnotation(ModelSize.class);
+        //加载已有的pdf（如果有），路径为空就新建pdf
         PDDocument document = loadPdfTemplate(modelPath);
         PDPage page;
+        //定义的页面宽高对应的pt点数
         float pageHeightPt, pageWidthPt;
-        //  创建内容流
+        //创建内容流
         PDPageContentStream contentStream;
-        //字体初始化
         if (document == null) {
             //创建页面
             document = new PDDocument();
-            fontConfig = new FontConfig(document);
-            //计算页面高度
+            //页面宽度，由模版定义
             pageWidth = modelSize.width();
-            pageHeight = getTotalLength(model);
+            //计算页面高度
+            pageHeight = getTotalLength(model, modelSize);
             //毫米转pt点
             pageWidthPt = pageWidth * ptConvert;
             pageHeightPt = pageHeight * ptConvert;
-            document = new PDDocument();
             //创建页面并新增
             page = new PDPage(new PDRectangle(pageWidthPt, pageHeightPt));
             document.addPage(page);
@@ -96,6 +99,8 @@ public class PdfUtils {
             pageHeightPt = page.getMediaBox().getHeight();
             pageWidth = page.getMediaBox().getWidth() / ptConvert;
         }
+        //字体初始化
+        fontConfig = new FontConfig(document);
         //先绘制文字
         Field[] listField = model.getClass().getDeclaredFields();
         //初始化游标为可变元素最小值
@@ -142,13 +147,8 @@ public class PdfUtils {
                                 //每个字符串都要根据对齐方式计算实际左边距
                                 xMM = getXMMbyPosition(position, font, pdFont, string);
                                 drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
-                                if (!position.alignType().equals(AlignEnum.VERTICAL)) {
-                                    //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
-                                    yMM += getFontMM(font.fontSize()) + position.stringMargin();
-                                } else {
-                                    //垂直居中，重新计算y坐标，游标无需移动
-                                    yMM = (pageHeight - getFontMM(font.fontSize())) / 2;
-                                }
+                                //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
+                                yMM += getFontMM(font.fontSize()) + position.stringMargin();
                             }
                         }
                     }
@@ -167,7 +167,7 @@ public class PdfUtils {
                     String text = position.title() + field.get(model);
                     PDFont pdFont = fontConfig.getPDFont(font.fontType());
                     xMM = getXMMbyPosition(position, font, pdFont, text);
-                    yMM = getYMMbyPosition(position, font, pageHeight);
+                    yMM = position.positionY();
                     drawText(contentStream, fontConfig, text, font, xMM * ptConvert, yMM * ptConvert);
                 }
                 if (field.isAnnotationPresent(ImageStyle.class)) {
@@ -183,46 +183,48 @@ public class PdfUtils {
         return document;
     }
 
-    public float getTotalLength(Object model) throws IllegalAccessException, IOException {
-        if (model.getClass().isAnnotationPresent(ModelSize.class)) {
-            ModelSize modelSize = model.getClass().getAnnotation(ModelSize.class);
-            float sum = 0;
-            //先处理外部模版
-            if (modelSize == null || modelSize.height() == 0) {
-                log.error("请使用正确的模版！");
-                System.exit(1);
-            }
-            //先默认不可变部分white占据模版所有高度，后续直接做减法
-            float height = modelSize.height(), white = height;
-            //先求出固定部分高度
-            Field[] listField = model.getClass().getDeclaredFields();
-            //遍历模版的每一个字段
-            for (Field field : listField) {
-                //找出其中需要绘制的可变列表
-                if (field.isAnnotationPresent(PdfList.class)) {
-                    field.setAccessible(true);
-                    PdfList pdfList = field.getAnnotation(PdfList.class);
-                    float listMargin = pdfList.listMargin();
-                    Type genericType = field.getGenericType();
-                    Object listObj = field.get(model);
-                    if (listObj instanceof List) {
-                        List<?> list = (List<?>) field.get(model);
-                        //直接使用该列表获取实际占据的高度
-                        sum += getListLength(list, listMargin);
-                        ParameterizedType pt = (ParameterizedType) genericType;
-                        Type[] actualTypes = pt.getActualTypeArguments();
-                        // 取第一个泛型参数，即 List<T> 中的 T
-                        Class<?> elementClass = (Class<?>) actualTypes[0];
-                        //这里计算模版中的可变部分高度
-                        white -= getItemLength(elementClass, listMargin);
-                    }
-                }
-            }
-            sum += white;
-            return sum;
-        } else {
-            return 0;
+    /**
+     * 使用模版固定部分高度+可变列表实际高度计算页面高度
+     *
+     * @param model     模版对象
+     * @param modelSize 获取的模版尺寸注解
+     * @return 最终高度，单位mm
+     * @throws IllegalAccessException
+     * @throws IOException
+     */
+    public float getTotalLength(Object model, ModelSize modelSize) throws IllegalAccessException, IOException {
+        float sum = 0;
+        //先处理外部模版
+        if (modelSize.height() <= 0 || modelSize.width() <= 0) {
+            throw new IllegalArgumentException("模版宽高不合法！");
         }
+        //先默认固定部分white占据模版所有高度，后续直接做减法
+        float height = modelSize.height(), white = height;
+        Field[] listField = model.getClass().getDeclaredFields();
+        //遍历模版的每一个字段，求出固定部分高度
+        for (Field field : listField) {
+            if (!field.isAnnotationPresent(PdfList.class)) {
+                continue;
+            }
+            //找出其中需要绘制的可变列表
+            field.setAccessible(true);
+            PdfList pdfList = field.getAnnotation(PdfList.class);
+            //获取不同列表之间的间距
+            float listMargin = pdfList.listMargin();
+            Object listObj = field.get(model);
+            if (listObj instanceof List) {
+                List<?> list = (List<?>) listObj;
+                if (list.size() == 0) {
+                    continue;
+                }
+                //直接使用该列表获取实际占据的高度
+                sum += getListLength(list, listMargin);
+                //这里计算模版中的可变部分高度
+                white -= getItemLength(list.get(0), listMargin);
+            }
+        }
+        sum += white;
+        return sum;
     }
 
     //获取实际的列表高度,同时缓存字符串换行结果，这里不考虑递归情况
@@ -270,11 +272,11 @@ public class PdfUtils {
     /**
      * 获取可变行元素的默认初始高度，也就是模版中的列表所在类中，所有需要填充的文本初始的行总高度
      */
-    public float getItemLength(Class<?> cls, float listMargin) {
+    public float getItemLength(Object obj, float listMargin) {
         //yMin指左上边界，yMax指左下边界（包含底边距）
         float yMin = Float.MAX_VALUE, yMax = 0, itemMargin;
         //反射逻辑
-        Field[] declaredFields = cls.getDeclaredFields();
+        Field[] declaredFields = obj.getClass().getDeclaredFields();
         for (Field field : declaredFields) {
             if (field.isAnnotationPresent(Position.class) && field.isAnnotationPresent(Font.class)) {
                 field.setAccessible(true);
@@ -400,16 +402,6 @@ public class PdfUtils {
             xMM = (pageWidth - pdFont.getStringWidth(text) / 1000 * font.fontSize() / ptConvert) / 2;
         }
         return xMM;
-    }
-
-    private float getYMMbyPosition(Position position, Font font, float pageHeight) {
-        float yMM;
-        if (!position.alignType().equals(AlignEnum.VERTICAL)) {
-            yMM = position.positionY();
-        } else {
-            yMM = (pageHeight - getFontMM(font.fontSize())) / 2;
-        }
-        return yMM;
     }
 
     public PDDocument loadPdfTemplate(String path) throws IOException {

@@ -9,10 +9,9 @@ import io.swagger.annotations.Api;
  * @date 2026-05-12 09:57
  * @date 2026-05-12
  */
-@Api(tags = "居中类型，HORIZONTAL-横向居中。VERTICAL-纵向居中。DEFAULT-不做处理。SELF-自定义")
+@Api(tags = "居中类型，HORIZONTAL-横向居中。DEFAULT-不做处理。SELF-自定义")
 public enum AlignEnum {
     HORIZONTAL,
-    VERTICAL,
     DEFAULT,
     SELF
 }
