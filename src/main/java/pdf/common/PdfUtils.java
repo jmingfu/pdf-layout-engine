@@ -202,21 +202,26 @@ public class PdfUtils {
         Field[] listField = model.getClass().getDeclaredFields();
         //遍历模版的每一个字段，求出固定部分高度
         for (Field field : listField) {
-            field.setAccessible(true);
-            Object listObj = field.get(model);
-            //分别判断是否配置注解、是否在List配置了注解、List长度是否合法
-            if (!field.isAnnotationPresent(PdfList.class) || !(listObj instanceof List) || ((List<?>) listObj).size() == 0) {
-                continue;
-            }
+            List<?> list = getListByField(model, field);
+            if (list == null) continue;
             PdfList pdfList = field.getAnnotation(PdfList.class);
-            List<?> list = (List<?>) listObj;
-            //直接使用该列表获取实际占据的高度
+            //直接使用该列表和注解获取实际占据的高度
             sum += getListLength(list, pdfList.listMargin());
             //这里使用坐标差值法计算模版中的写死的列表高度
             white -= getItemLength(list.get(0), pdfList.listMargin());
         }
         sum += white;
         return sum;
+    }
+
+    private List<?> getListByField(Object model, Field field) throws IllegalAccessException {
+        field.setAccessible(true);
+        Object listObj = field.get(model);
+        //分别判断是否配置注解、是否在List配置了注解、List长度是否合法
+        if (!field.isAnnotationPresent(PdfList.class) || !(listObj instanceof List) || ((List<?>) listObj).size() == 0) {
+            return null;
+        }
+        return (List<?>) listObj;
     }
 
     /**
@@ -233,12 +238,11 @@ public class PdfUtils {
         float len = 0;
         //遍历列表中的所有元素，累加求出总高度。
         for (Object o : list) {
-            Field[] fields = o.getClass().getDeclaredFields();
+            //这个map存储每个y坐标下的文本占据的高度，用来累计高度、处理同一高度多个元素
             Map<Float, Float> map = new HashMap<>();
-            for (Field field : fields) {
+            for (Field field : o.getClass().getDeclaredFields()) {
                 field.setAccessible(true);
-                if (!field.isAnnotationPresent(Position.class) || !field.isAnnotationPresent(Font.class)
-                        || StringUtils.isBlank(String.valueOf(field.get(o)))) {
+                if (isNotDrawString(o, field)) {
                     continue;
                 }
                 Position position = field.getAnnotation(Position.class);
@@ -246,12 +250,11 @@ public class PdfUtils {
                 String str = position.title() + field.get(o);
                 //将字符串、字体、字号拼接作为key。便于缓存换行结果
                 String key = str + "|" + font.fontType() + "|" + font.fontSize();
-                int fontSize = font.fontSize();
-                //换行，换行的宽度阈值设置为180mm
-                splitString(str, key, font, font.maxWidth());
-                //换行后字符串总高
-                float stringHeight = strs.get(key).size() * (getFontMM(fontSize) + position.stringMargin());
-                //累加时需要用换行后字符串数量 * （字符高度+底边距）
+                //换行，换行的宽度阈值默认为180mm
+                List<String> strings = splitString(str, key, font);
+                //换行后字符串总高,累加时需要用换行后字符串数量 * （字符高度+底边距）
+                float stringHeight = strings.size() * (getFontMM(font.fontSize()) + position.stringMargin());
+                //如果两行文字在模版里是同一行，计算高度时只需累加最大的实际高度
                 if (map.containsKey(position.positionY())) {
                     if (map.get(position.positionY()) < stringHeight) {
                         map.put(position.positionY(), stringHeight);
@@ -259,7 +262,6 @@ public class PdfUtils {
                 } else {
                     map.put(position.positionY(), stringHeight);
                 }
-
             }
             for (float height : map.values()) {
                 len += height;
@@ -272,13 +274,26 @@ public class PdfUtils {
         return len;
     }
 
+
+    /**
+     * //判断当前字符串是否需要绘制，如果注解缺失或者字符串为空就不绘制
+     *
+     * @param o     文本所在对象
+     * @param field 反射获取到的字段
+     * @return 判断结果，为true就不绘制
+     * @throws IllegalAccessException 反射异常
+     */
+    private boolean isNotDrawString(Object o, Field field) throws IllegalAccessException {
+        return !field.isAnnotationPresent(Position.class) || !field.isAnnotationPresent(Font.class)
+                || !StringUtils.isNotBlank(String.valueOf(field.get(o)));
+    }
+
     /**
      * 坐标差值法，获取可变行元素的默认初始高度，也就是模版中的，列表所在类中，所有需要填充的文本初始的行总高度
      */
     public float getItemLength(Object obj, float listMargin) {
-        //yMin指上边界，yMax指下边界（包含底边距）。都是文字最顶部和页面顶部距离
+        //yMin指上边界，yMax指下边界。都是文字最顶部和页面顶部距离
         float yMin = Float.MAX_VALUE, yMax = 0;
-        //反射逻辑
         Field[] declaredFields = obj.getClass().getDeclaredFields();
         for (Field field : declaredFields) {
             if (!field.isAnnotationPresent(Position.class) || !field.isAnnotationPresent(Font.class)) {
@@ -288,17 +303,18 @@ public class PdfUtils {
             Position position = field.getAnnotation(Position.class);
             Font font = field.getAnnotation(Font.class);
             float fontHeightMM = getFontMM(font.fontSize());
+            //minY记录全局最小值
             minY = Math.min(minY, position.positionY());
             yMin = Math.min(yMin, position.positionY());
-            //最低点也是y最大时，需要算上文字高度和底边距
+            //最低点也是y最大时，需要加上文字高度和底边距
             yMax = Math.max(yMax, position.positionY() + fontHeightMM + position.stringMargin());
         }
-        //0表示如果某个列表漏加注解就不计算，跳过。
+        //0表示如果某个列表漏加注解，就不计算并跳过。
         return yMin == Float.MAX_VALUE ? 0 : yMax - yMin + listMargin;
     }
 
     //文本换行并保存
-    public List<String> splitString(String text, String key, Font font, float maxWidthMM) throws IOException {
+    public List<String> splitString(String text, String key, Font font) throws IOException {
         // 2. 命中缓存则直接返回
         if (strs.containsKey(key)) {
             return strs.get(key);
@@ -315,7 +331,7 @@ public class PdfUtils {
                 char c = text.charAt(end);
                 float charWidth = pdFont.getStringWidth(String.valueOf(c)) / 1000f * font.fontSize();
                 // 如果加上当前字符超出最大宽度，换行
-                if (currentWidth + charWidth > getFontPt(maxWidthMM)) {
+                if (currentWidth + charWidth > getFontPt(font.maxWidth())) {
                     break;
                 }
                 currentWidth += charWidth;
@@ -339,6 +355,31 @@ public class PdfUtils {
 
     public float getFontPt(float fontMM) {
         return fontMM * ptConvert;
+    }
+
+    /**
+     * 如果是传入的页面，需要初始化游标，确定绘制的起点。记录所有列表第一个元素的最小y下标即可
+     *
+     * @param model 模版对象
+     * @throws IllegalAccessException 反射异常
+     */
+    private void initMoveY(Object model) throws IllegalAccessException {
+        Field[] declaredFields = model.getClass().getDeclaredFields();
+        for (Field declaredField : declaredFields) {
+            List<?> list = getListByField(model, declaredField);
+            if (list == null) {
+                continue;
+            }
+            Object firstObj = list.get(0);
+            for (Field field : firstObj.getClass().getDeclaredFields()) {
+                field.setAccessible(true);
+                if (!isNotDrawString(firstObj, field)) {
+                    continue;
+                }
+                Position position = field.getAnnotation(Position.class);
+                minY = Math.min(minY, position.positionY());
+            }
+        }
     }
 
     //字符串颜色转Color对象
@@ -426,26 +467,5 @@ public class PdfUtils {
         return document;
     }
 
-    private void initMoveY(Object model) throws IllegalAccessException {
-        Field[] declaredFields = model.getClass().getDeclaredFields();
-        for (Field declaredField : declaredFields) {
-            if (declaredField.isAnnotationPresent(PdfList.class)) {
-                Type genericType = declaredField.getGenericType();
-                declaredField.setAccessible(true);
-                Object listObj = declaredField.get(model);
-                if (listObj instanceof List) {
-                    ParameterizedType pt = (ParameterizedType) genericType;
-                    Type[] actualTypeArguments = pt.getActualTypeArguments();
-                    Class<?> cls = (Class<?>) actualTypeArguments[0];
-                    for (Field field : cls.getDeclaredFields()) {
-                        if (field.isAnnotationPresent(Position.class)) {
-                            field.setAccessible(true);
-                            Position position = field.getAnnotation(Position.class);
-                            minY = Math.min(minY, position.positionY());
-                        }
-                    }
-                }
-            }
-        }
-    }
+
 }
