@@ -82,6 +82,8 @@ public class PdfUtils {
             document = new PDDocument();
             //页面宽度，由模版定义
             pageWidth = modelSize.width();
+            //计算高度前，依赖document对象初始化字体
+            fontConfig = new FontConfig(document);
             //计算页面高度
             pageHeight = getTotalLength(model, modelSize);
             //毫米转pt点
@@ -92,15 +94,17 @@ public class PdfUtils {
             document.addPage(page);
             contentStream = new PDPageContentStream(document, page);
         } else {
+            //初始化字体
+            fontConfig = new FontConfig(document);
             //已存在页面需要初始化游标
             initMoveY(model);
             page = document.getPage(0);
             contentStream = new PDPageContentStream(document, page, PDPageContentStream.AppendMode.APPEND, true, true);
-            pageHeightPt = page.getMediaBox().getHeight();
+            pageHeight = page.getMediaBox().getHeight() / ptConvert;
             pageWidth = page.getMediaBox().getWidth() / ptConvert;
+            pageHeightPt = pageHeight * ptConvert;
         }
-        //字体初始化
-        fontConfig = new FontConfig(document);
+
         //先绘制文字
         Field[] listField = model.getClass().getDeclaredFields();
         //初始化游标为可变元素最小值
@@ -130,14 +134,14 @@ public class PdfUtils {
                             List<String> strings = strs.get(key);
                             //获取字体
                             PDFont pdFont = fontConfig.getPDFont(font.fontType());
-                            float strTotalHeight = strings.size() * ((getFontMM(font.fontSize()) + position.stringMargin()));
-                            yMM = moveY + getFontMM(font.fontSize());
+                            float strTotalHeight = strings.size() * ((getMMByPt(font.fontSize()) + position.stringMargin()));
+                            yMM = moveY + getMMByPt(font.fontSize());
                             if (!map.containsKey(position.positionY())) {
                                 map.put(position.positionY(), strTotalHeight);
                                 moveY += strTotalHeight;
                             } else {
                                 float maxTotalHeight = map.get(position.positionY());
-                                yMM = moveY - maxTotalHeight + getFontMM(font.fontSize());
+                                yMM = moveY - maxTotalHeight + getMMByPt(font.fontSize());
                                 if (strTotalHeight > maxTotalHeight) {
                                     map.put(position.positionY(), strTotalHeight);
                                     moveY += strTotalHeight - maxTotalHeight;
@@ -148,7 +152,7 @@ public class PdfUtils {
                                 xMM = getXMMbyPosition(position, font, pdFont, string);
                                 drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
                                 //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
-                                yMM += getFontMM(font.fontSize()) + position.stringMargin();
+                                yMM += getMMByPt(font.fontSize()) + position.stringMargin();
                             }
                         }
                     }
@@ -253,7 +257,7 @@ public class PdfUtils {
                 //换行，换行的宽度阈值默认为180mm
                 List<String> strings = splitString(str, key, font);
                 //换行后字符串总高,累加时需要用换行后字符串数量 * （字符高度+底边距）
-                float stringHeight = strings.size() * (getFontMM(font.fontSize()) + position.stringMargin());
+                float stringHeight = strings.size() * (getMMByPt(font.fontSize()) + position.stringMargin());
                 //如果两行文字在模版里是同一行，计算高度时只需累加最大的实际高度
                 if (map.containsKey(position.positionY())) {
                     if (map.get(position.positionY()) < stringHeight) {
@@ -276,7 +280,7 @@ public class PdfUtils {
 
 
     /**
-     * //判断当前字符串是否需要绘制，如果注解缺失或者字符串为空就不绘制
+     * 判断当前字符串是否需要绘制，如果注解缺失或者字符串为空就不绘制
      *
      * @param o     文本所在对象
      * @param field 反射获取到的字段
@@ -290,6 +294,10 @@ public class PdfUtils {
 
     /**
      * 坐标差值法，获取可变行元素的默认初始高度，也就是模版中的，列表所在类中，所有需要填充的文本初始的行总高度
+     *
+     * @param obj        列表对应的对象
+     * @param listMargin 列表之间的边距
+     * @return 计算出的高度
      */
     public float getItemLength(Object obj, float listMargin) {
         //yMin指上边界，yMax指下边界。都是文字最顶部和页面顶部距离
@@ -302,7 +310,7 @@ public class PdfUtils {
             field.setAccessible(true);
             Position position = field.getAnnotation(Position.class);
             Font font = field.getAnnotation(Font.class);
-            float fontHeightMM = getFontMM(font.fontSize());
+            float fontHeightMM = getMMByPt(font.fontSize());
             //minY记录全局最小值
             minY = Math.min(minY, position.positionY());
             yMin = Math.min(yMin, position.positionY());
@@ -313,47 +321,58 @@ public class PdfUtils {
         return yMin == Float.MAX_VALUE ? 0 : yMax - yMin + listMargin;
     }
 
-    //文本换行并保存
+    /**
+     * 文本换行处理，采用滑动窗口换行算法，同时会以原串+字体+字号缓存文本换行结果
+     *
+     * @param text 需要换行的原字符串
+     * @param key  存入Map缓存的key值，用原串+字体+字号以‘|‘分割拼接而成
+     * @param font 文本样式，包含字体、字号
+     * @return 换行结果，纯字符串文本
+     * @throws IOException 获取字符宽度api可能抛出
+     */
     public List<String> splitString(String text, String key, Font font) throws IOException {
-        // 2. 命中缓存则直接返回
+        // 命中缓存则直接返回
         if (strs.containsKey(key)) {
             return strs.get(key);
         }
+        //获取字体对象，用于计算宽度
         PDFont pdFont = fontConfig.getPDFont(font.fontType());
         List<String> lines = new ArrayList<>();
-        int len = text.length();
-        int start = 0;
+        //滑动窗口换行
+        int len = text.length(), start = 0;
         while (start < len) {
             int end = start;
+            //窗口内字符累计宽度
             float currentWidth = 0f;
             // 累加每个字符的宽度
             while (end < len) {
                 char c = text.charAt(end);
                 float charWidth = pdFont.getStringWidth(String.valueOf(c)) / 1000f * font.fontSize();
                 // 如果加上当前字符超出最大宽度，换行
-                if (currentWidth + charWidth > getFontPt(font.maxWidth())) {
+                currentWidth += charWidth;
+                if (currentWidth > getPtByMM(font.maxWidth())) {
                     break;
                 }
-                currentWidth += charWidth;
                 end++;
             }
-            // 避免死循环：如果一个字符都放不下，强制截取一个字符
+            //一个字符都放不下时，强制截取一个，并避免死循环
             if (start == end) {
-                end = start + 1;
+                end = end + 1;
             }
             lines.add(text.substring(start, end));
             start = end;
         }
-        // 3. 存入缓存，Key = text + "|" + fontName + "|" + fontSize
         strs.put(key, lines);
         return lines;
     }
 
-    public float getFontMM(int fontSize) {
+    //pt点转毫米(mm)
+    public float getMMByPt(int fontSize) {
         return fontSize / ptConvert;
     }
 
-    public float getFontPt(float fontMM) {
+    //毫米(mm)转pt点
+    public float getPtByMM(float fontMM) {
         return fontMM * ptConvert;
     }
 
