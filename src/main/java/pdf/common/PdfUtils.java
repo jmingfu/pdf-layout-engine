@@ -105,55 +105,56 @@ public class PdfUtils {
             pageHeightPt = pageHeight * ptConvert;
         }
 
-        //先绘制文字
-        Field[] listField = model.getClass().getDeclaredFields();
         //初始化游标为可变元素最小值
         float moveY = minY;
-        for (Field field : listField) {
+        for (Field field : model.getClass().getDeclaredFields()) {
             field.setAccessible(true);
             float xMM, yMM;
             if (field.isAnnotationPresent(PdfList.class)) {
                 //判断是否有注解,来确定列表之间、列表内元素之间是否需要上下边距
                 PdfList pdfList = field.getAnnotation(PdfList.class);
                 float listMargin = pdfList.listMargin();
-                List<?> list = (List<?>) field.get(model);
+                List<?> list = getListByField(model, field);
+                if (list == null || list.size() == 0) {
+                    continue;
+                }
                 for (Object o : list) {
                     Field[] declaredFields = o.getClass().getDeclaredFields();
                     Map<Float, Float> map = new HashMap<>();
                     for (Field declaredField : declaredFields) {
                         declaredField.setAccessible(true);
-                        if (declaredField.isAnnotationPresent(Position.class) && declaredField.isAnnotationPresent(Font.class)
-                                && StringUtils.isNotBlank((String) declaredField.get(o))) {
-                            Font font = declaredField.getAnnotation(Font.class);
-                            Position position = declaredField.getAnnotation(Position.class);
-                            if (position.alignType().equals(AlignEnum.SELF)) {
-                                continue;
-                            }
-                            String value = (String) declaredField.get(o);
-                            String key = position.title() + value + "|" + font.fontType() + "|" + font.fontSize();
-                            List<String> strings = strs.get(key);
-                            //获取字体
-                            PDFont pdFont = fontConfig.getPDFont(font.fontType());
-                            float strTotalHeight = strings.size() * ((getMMByPt(font.fontSize()) + position.stringMargin()));
-                            yMM = moveY + getMMByPt(font.fontSize());
-                            if (!map.containsKey(position.positionY())) {
+                        if (isNotDrawString(o, field)) {
+                            continue;
+                        }
+                        Font font = declaredField.getAnnotation(Font.class);
+                        Position position = declaredField.getAnnotation(Position.class);
+                        if (position.alignType().equals(AlignEnum.SELF)) {
+                            continue;
+                        }
+                        String value = String.valueOf(declaredField.get(o));
+                        String key = position.title() + value + "|" + font.fontType() + "|" + font.fontSize();
+                        List<String> strings = strs.get(key);
+                        //获取字体
+                        PDFont pdFont = fontConfig.getPDFont(font.fontType());
+                        float strTotalHeight = strings.size() * ((getMMByPt(font.fontSize()) + position.stringMargin()));
+                        yMM = moveY + getMMByPt(font.fontSize());
+                        if (!map.containsKey(position.positionY())) {
+                            map.put(position.positionY(), strTotalHeight);
+                            moveY += strTotalHeight;
+                        } else {
+                            float maxTotalHeight = map.get(position.positionY());
+                            yMM = moveY - maxTotalHeight + getMMByPt(font.fontSize());
+                            if (strTotalHeight > maxTotalHeight) {
                                 map.put(position.positionY(), strTotalHeight);
-                                moveY += strTotalHeight;
-                            } else {
-                                float maxTotalHeight = map.get(position.positionY());
-                                yMM = moveY - maxTotalHeight + getMMByPt(font.fontSize());
-                                if (strTotalHeight > maxTotalHeight) {
-                                    map.put(position.positionY(), strTotalHeight);
-                                    moveY += strTotalHeight - maxTotalHeight;
-                                }
+                                moveY += strTotalHeight - maxTotalHeight;
                             }
-                            for (String string : strings) {
-                                //每个字符串都要根据对齐方式计算实际左边距
-                                xMM = getXMMbyPosition(position, font, pdFont, string);
-                                drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
-                                //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
-                                yMM += getMMByPt(font.fontSize()) + position.stringMargin();
-                            }
+                        }
+                        for (String string : strings) {
+                            //每个字符串都要根据对齐方式计算实际左边距
+                            xMM = getXMMbyPosition(position, font, pdFont, string);
+                            drawText(contentStream, fontConfig, string, font, xMM * ptConvert, yMM * ptConvert);
+                            //游标位置默认文字左上角，而绘制起点是左下角，需要偏移。
+                            yMM += getMMByPt(font.fontSize()) + position.stringMargin();
                         }
                     }
                     //不同列表之间的元素，需要复用注解上的底边距进行偏移
@@ -203,9 +204,9 @@ public class PdfUtils {
         }
         //先默认固定部分white占据模版所有高度，后续直接做减法
         float height = modelSize.height(), white = height;
-        Field[] listField = model.getClass().getDeclaredFields();
         //遍历模版的每一个字段，求出固定部分高度
-        for (Field field : listField) {
+        for (Field field : model.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
             List<?> list = getListByField(model, field);
             if (list == null) continue;
             PdfList pdfList = field.getAnnotation(PdfList.class);
@@ -218,8 +219,15 @@ public class PdfUtils {
         return sum;
     }
 
+    /**
+     * 通过field对象获取所在的list对象
+     *
+     * @param model 模版对象
+     * @param field 字段
+     * @return List对象
+     * @throws IllegalAccessException
+     */
     private List<?> getListByField(Object model, Field field) throws IllegalAccessException {
-        field.setAccessible(true);
         Object listObj = field.get(model);
         //分别判断是否配置注解、是否在List配置了注解、List长度是否合法
         if (!field.isAnnotationPresent(PdfList.class) || !(listObj instanceof List) || ((List<?>) listObj).size() == 0) {
@@ -270,7 +278,7 @@ public class PdfUtils {
             for (float height : map.values()) {
                 len += height;
             }
-            //如果所有元素都为空，就不加底边距
+            //如果所有元素不为空，就加入底边距
             if (len != 0) {
                 len += listMargin;
             }
@@ -304,10 +312,10 @@ public class PdfUtils {
         float yMin = Float.MAX_VALUE, yMax = 0;
         Field[] declaredFields = obj.getClass().getDeclaredFields();
         for (Field field : declaredFields) {
+            field.setAccessible(true);
             if (!field.isAnnotationPresent(Position.class) || !field.isAnnotationPresent(Font.class)) {
                 continue;
             }
-            field.setAccessible(true);
             Position position = field.getAnnotation(Position.class);
             Font font = field.getAnnotation(Font.class);
             float fontHeightMM = getMMByPt(font.fontSize());
@@ -392,7 +400,7 @@ public class PdfUtils {
             Object firstObj = list.get(0);
             for (Field field : firstObj.getClass().getDeclaredFields()) {
                 field.setAccessible(true);
-                if (!isNotDrawString(firstObj, field)) {
+                if (isNotDrawString(firstObj, field)) {
                     continue;
                 }
                 Position position = field.getAnnotation(Position.class);
