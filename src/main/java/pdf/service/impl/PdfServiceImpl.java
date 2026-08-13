@@ -2,10 +2,12 @@ package pdf.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
+import org.apache.fontbox.ttf.TrueTypeFont;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import pdf.anno.Font;
 import pdf.anno.ImageStyle;
@@ -14,6 +16,7 @@ import pdf.anno.Position;
 import pdf.cell.TestCell;
 import pdf.common.PdfUtils;
 import pdf.config.style.FontConfig;
+import pdf.enums.FontTypeEnum;
 import pdf.model.CertiModel;
 import pdf.model.Resume;
 import pdf.service.PdfService;
@@ -23,6 +26,8 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 /**
  * 基于SpringBoot框架的个人练手项目-
@@ -34,7 +39,14 @@ import java.util.List;
 @Service
 @Slf4j
 public class PdfServiceImpl implements PdfService {
-    PdfUtils pdfUtils = new PdfUtils();
+    @Autowired
+    PdfUtils pdfUtils;
+
+    @Autowired
+    ExecutorService prescriptionExecutor;
+
+    @Autowired
+    Map<FontTypeEnum, TrueTypeFont> trueTypeFontMap;
 
     @Override
     public byte[] generateCertificate(TestCell testCell) {
@@ -43,6 +55,7 @@ public class PdfServiceImpl implements PdfService {
 
     @Override
     public String generateMyCerti() throws Exception {
+        long begin = System.currentTimeMillis();
         // 1. 准备测试数据
         TestCell cell1 = new TestCell();
         cell1.setRepoName("王五");
@@ -66,12 +79,12 @@ public class PdfServiceImpl implements PdfService {
 
         // 2. 构建模板对象
         CertiModel model = new CertiModel();
-        model.setTopImg("/images/顶部图片.png");
-        model.setTopLineImg("/images/边框图片.png");
-        model.setButtonLineImg("/images/边框图片.png");
-        model.setLeftLineImg("/images/边框图片.png");
-        model.setRightLineImg("/images/边框图片.png");
-        model.setOrgName("XX生物科技有限公司");
+//        model.setTopImg("/images/顶部图片.png");
+//        model.setTopLineImg("/images/边框图片.png");
+//        model.setButtonLineImg("/images/边框图片.png");
+//        model.setLeftLineImg("/images/边框图片.png");
+//        model.setRightLineImg("/images/边框图片.png");
+        //model.setOrgName("XX生物科技有限公司");
         model.setCertiTitle("细胞储存证书");
         model.setRepoName("王五");
         // 添加多个细胞测试高度累加
@@ -82,21 +95,21 @@ public class PdfServiceImpl implements PdfService {
         model.setCellList(cellList);
 
         // 3. 打印测试信息
-        System.out.println("========== 测试数据 ==========");
-        System.out.println("细胞数量: " + cellList.size());
-        System.out.println();
+//        System.out.println("========== 测试数据 ==========");
+//        System.out.println("细胞数量: " + cellList.size());
+//        System.out.println();
 
         // 单个细胞内容预览
-        for (int i = 0; i < cellList.size(); i++) {
-            TestCell cell = cellList.get(i);
-            System.out.println("细胞" + (i + 1) + ":");
-            System.out.println("  储存人: " + cell.getRepoName());
-            System.out.println("  细胞名称: " + cell.getCellName());
-            System.out.println("  存储日期: " + cell.getCellDate());
-            System.out.println("  存储方式: " + cell.getCellWay());
-            //System.out.println("  细胞名称长度: " + cell.getCellName().length() + " 字符");
-            System.out.println();
-        }
+//        for (int i = 0; i < cellList.size(); i++) {
+//            TestCell cell = cellList.get(i);
+//            System.out.println("细胞" + (i + 1) + ":");
+//            System.out.println("  储存人: " + cell.getRepoName());
+//            System.out.println("  细胞名称: " + cell.getCellName());
+//            System.out.println("  存储日期: " + cell.getCellDate());
+//            System.out.println("  存储方式: " + cell.getCellWay());
+//            //System.out.println("  细胞名称长度: " + cell.getCellName().length() + " 字符");
+//            System.out.println();
+//        }
         //6. 调用生成方法
         //7接下来就需要自定义的后置处理。例如引擎无法处理的右下角跟随文字移动的用户名、公司名；底框。还有需要拉伸的侧边框
         PDDocument document = pdfUtils.generatePdfDocument(model);
@@ -106,12 +119,13 @@ public class PdfServiceImpl implements PdfService {
             return "";
         }
         //自定义后置处理
-        return postChange(document, model);
+//        return postChange(document, model);
         // 10. 输出到响应（测试时保存到本地文件）
-//        String outputPath = "target/output.pdf";
-//        document.save(outputPath);
-//        document.close();
-//        System.out.println("PDF 已生成：" + outputPath);
+        String outputPath = "target/output" + System.currentTimeMillis() + ".pdf";
+        //document.save(outputPath);
+        document.close();
+        System.out.println("PDF 已生成：" + outputPath + ",处理时间为：" + (System.currentTimeMillis() - begin));
+        return outputPath;
     }
 
     public String postChange(PDDocument document, CertiModel model) throws IOException, NoSuchFieldException, IllegalAccessException {
@@ -148,7 +162,7 @@ public class PdfServiceImpl implements PdfService {
         Font font = orgName.getAnnotation(Font.class);
         position = orgName.getAnnotation(Position.class);
         String text = (String) orgName.get(model);
-        FontConfig fontConfig = new FontConfig(document);
+        FontConfig fontConfig = new FontConfig(document, trueTypeFontMap);
         int len = text.length();
         float strWidthPt = 0;
         for (int i = 0; i < len; i++) {
@@ -202,5 +216,10 @@ public class PdfServiceImpl implements PdfService {
         document.close();
         System.out.println("PDF 已生成：" + outputPath);
 
+    }
+
+    @Override
+    public void batchGenerateCertificate() {
+        prescriptionExecutor.submit(this::generateMyCerti);
     }
 }

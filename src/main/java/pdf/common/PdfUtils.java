@@ -4,24 +4,26 @@ import io.swagger.annotations.Api;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.fontbox.ttf.TrueTypeFont;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import pdf.anno.Font;
 import pdf.anno.*;
 import pdf.config.style.FontConfig;
 import pdf.enums.AlignEnum;
+import pdf.enums.FontTypeEnum;
 
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,10 +39,15 @@ import java.util.Map;
  */
 @Api(tags = "PDF工具类")
 @Slf4j
+@Component
 public class PdfUtils {
     private final Map<String, List<String>> strs = new HashMap<>();
     // private final float itemMargin = 4.5f;
     private float minY = Float.MAX_VALUE;
+
+    @Autowired
+    Map<FontTypeEnum, TrueTypeFont> trueTypeFontMap;
+
     private FontConfig fontConfig;
     private float pageWidth;
     public final float ptConvert = 2.83465f;
@@ -83,9 +90,10 @@ public class PdfUtils {
             //页面宽度，由模版定义
             pageWidth = modelSize.width();
             //计算高度前，依赖document对象初始化字体
-            fontConfig = new FontConfig(document);
+            fontConfig = new FontConfig(document,trueTypeFontMap);
             //计算页面高度
             pageHeight = getTotalLength(model, modelSize);
+            pageHeight = 180;
             //毫米转pt点
             pageWidthPt = pageWidth * ptConvert;
             pageHeightPt = pageHeight * ptConvert;
@@ -95,7 +103,7 @@ public class PdfUtils {
             contentStream = new PDPageContentStream(document, page);
         } else {
             //初始化字体
-            fontConfig = new FontConfig(document);
+            fontConfig = new FontConfig(document,trueTypeFontMap);
             //已存在页面需要初始化游标
             initMoveY(model);
             page = document.getPage(0);
@@ -123,7 +131,7 @@ public class PdfUtils {
                     Map<Float, Float> map = new HashMap<>();
                     for (Field declaredField : declaredFields) {
                         declaredField.setAccessible(true);
-                        if (isNotDrawString(o, field)) {
+                        if (isNotDrawString(o, declaredField)) {
                             continue;
                         }
                         Font font = declaredField.getAnnotation(Font.class);
@@ -131,7 +139,7 @@ public class PdfUtils {
                         if (position.alignType().equals(AlignEnum.SELF)) {
                             continue;
                         }
-                        String value = String.valueOf(declaredField.get(o));
+                        String value = (String) declaredField.get(o);
                         String key = position.title() + value + "|" + font.fontType() + "|" + font.fontSize();
                         List<String> strings = strs.get(key);
                         //获取字体
@@ -178,12 +186,15 @@ public class PdfUtils {
                 if (field.isAnnotationPresent(ImageStyle.class)) {
                     ImageStyle imageStyle = field.getAnnotation(ImageStyle.class);
                     String path = (String) field.get(model);
+                    if (StringUtils.isEmpty(path)) {
+                        continue;
+                    }
                     drawImage(document, contentStream, path, imageStyle.width() * ptConvert, imageStyle.height() * ptConvert,
                             position.positionX() * ptConvert, position.positionY() * ptConvert, pageHeightPt);
                 }
             }
         }
-        System.out.println("高度为：" + pageHeight + "宽度为" + pageWidth);
+        //System.out.println("高度为：" + pageHeight + "宽度为" + pageWidth);
         contentStream.close();
         return document;
     }
@@ -297,7 +308,7 @@ public class PdfUtils {
      */
     private boolean isNotDrawString(Object o, Field field) throws IllegalAccessException {
         return !field.isAnnotationPresent(Position.class) || !field.isAnnotationPresent(Font.class)
-                || !StringUtils.isNotBlank(String.valueOf(field.get(o)));
+                || !StringUtils.isNotEmpty((String) field.get(o));
     }
 
     /**
@@ -393,6 +404,7 @@ public class PdfUtils {
     private void initMoveY(Object model) throws IllegalAccessException {
         Field[] declaredFields = model.getClass().getDeclaredFields();
         for (Field declaredField : declaredFields) {
+            declaredField.setAccessible(true);
             List<?> list = getListByField(model, declaredField);
             if (list == null) {
                 continue;

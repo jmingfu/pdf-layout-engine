@@ -21,19 +21,19 @@ import pdf.enums.FontTypeEnum;
 public class TestCell {
     private String repoName;
 
-    @Position(positionX = 10,positionY = 113, alignType = AlignEnum.DEFAULT)
+    @Position(positionX = 10,positionY = 23, alignType = AlignEnum.DEFAULT)
     @Font(fontSize = 24, fontType = FontTypeEnum.HEITI,maxWidth = 50)
     private String cellNameTitle;
 
-    @Position(positionX = 50,positionY = 113, alignType = AlignEnum.DEFAULT)
+    @Position(positionX = 50,positionY = 23, alignType = AlignEnum.DEFAULT)
     @Font(fontSize = 24, fontType = FontTypeEnum.SONGTI,maxWidth = 130)
     private String cellName;
 
-    @Position(positionY = 126, title = "存储日期：", alignType = AlignEnum.HORIZONTAL)
+    @Position(positionY = 36, title = "存储日期：", alignType = AlignEnum.HORIZONTAL)
     @Font(fontSize = 18)
     private String cellDate;
 
-    @Position(positionY = 136.82f, title = "存储方式：", alignType = AlignEnum.HORIZONTAL)
+    @Position(positionY = 46.82f, title = "存储方式：", alignType = AlignEnum.HORIZONTAL)
     @Font(fontSize = 12, fontType = FontTypeEnum.SONGTI, color = "#FF0000")
     private String cellWay;
 

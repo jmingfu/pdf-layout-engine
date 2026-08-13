@@ -3,13 +3,10 @@ package pdf.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
-import pdf.anno.Position;
-import pdf.cell.TestCell;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import pdf.service.PdfService;
-
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 
 /**
  * 基于SpringBoot框架的个人练手项目-
@@ -35,5 +32,12 @@ public class PdfController {
     @PostMapping("/ByPath")
     public void generateResume() throws Exception {
         pdfService.generateResume();
+    }
+
+    @ApiOperation(value = "并发生成证书", notes = "根据用户ID生成PDF证书并返回文件流")
+    @PostMapping("/BatchByObj")
+    public String batchGenerateCertificate() {
+        pdfService.batchGenerateCertificate();
+        return "成功";
     }
 }

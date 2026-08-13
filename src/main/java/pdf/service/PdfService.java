@@ -1,11 +1,7 @@
 package pdf.service;
 
 import io.swagger.annotations.Api;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.springframework.stereotype.Service;
 import pdf.cell.TestCell;
-
-import java.io.IOException;
 
 /**
  * 基于SpringBoot框架的个人练手项目-
@@ -22,4 +18,6 @@ public interface PdfService {
     String generateMyCerti() throws Exception;
 
     void generateResume() throws Exception;
+
+    void batchGenerateCertificate();
 }
